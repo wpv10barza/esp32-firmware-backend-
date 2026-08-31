@@ -1,4 +1,4 @@
-name: Firmware and Pages
+name: Firmware and site artifact
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: firmware-pages-${{ github.ref }}
+  group: firmware-site-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -46,24 +46,17 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  pages:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  site:
     needs: firmware
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
+      - name: Verify static site
+        run: |
+          test -s site/index.html
+          grep -q 'ESP32-S3-4848S040' site/index.html
+      - uses: actions/upload-artifact@v4
         with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          name: github-pages-site
+          path: site/
+          if-no-files-found: error
