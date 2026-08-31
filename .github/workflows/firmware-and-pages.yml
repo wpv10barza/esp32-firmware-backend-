@@ -1,0 +1,69 @@
+name: Firmware and Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firmware-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reject local secrets
+        run: |
+          test ! -f include/local_config.h
+          ! git ls-files | grep -Ei 'credentials|service-account|\.env$'
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.18
+      - name: Compile ESP32-S3-4848S040
+        run: pio run --environment panel_4848s040
+      - name: Package reproducible binaries
+        run: |
+          mkdir -p dist
+          cp .pio/build/panel_4848s040/firmware.bin dist/
+          cp .pio/build/panel_4848s040/bootloader.bin dist/
+          cp .pio/build/panel_4848s040/partitions.bin dist/
+          cp .pio/build/panel_4848s040/firmware.elf dist/
+          printf '%s\n' '0x0000 bootloader.bin' '0x8000 partitions.bin' '0x10000 firmware.bin' > dist/flash-layout.txt
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          printf '{"source_sha":"%s","environment":"panel_4848s040","validation":"compiled_not_physically_flashed"}\n' "${GITHUB_SHA}" > dist/manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esp32-s3-4848s040-firmware
+          path: dist/
+          if-no-files-found: error
+
+  pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: firmware
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
