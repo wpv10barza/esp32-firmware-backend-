@@ -134,7 +134,7 @@ void drawPanel() {
   const uint16_t background = stateBackground(panelState);
   const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
   display->fillScreen(background);
-  drawCentered("ASISTENTE 3C", 18, 2, color565(170, 220, 255));
+  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
 
   if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
     display->drawLine(112, 105, 172, 165, eye);
@@ -417,7 +417,7 @@ int send3CCommand(const String& rawCommand) {
     backendAvailable = true;
     lastCommandId = jsonStringValue(lastBackendMessage, "command_id");
     lastCommandPoll = millis();
-    updatePanel(PanelState::Pending, "Confirme en Asistente 3C", true);
+    updatePanel(PanelState::Pending, "Confirme en Interfaz Portátil", true);
   } else {
     backendAvailable = false;
     updatePanel(PanelState::Error, String("Envio HTTP ") + code, true);
@@ -448,14 +448,14 @@ void pollCommandStatus() {
     updatePanel(PanelState::Rejected, result.length() ? result : "Cancelado en WSL", true);
     lastCommandId = "";
   } else if (status == "pending_confirmation" && panelState != PanelState::Pending) {
-    updatePanel(PanelState::Pending, "Confirme en Asistente 3C");
+    updatePanel(PanelState::Pending, "Confirme en Interfaz Portátil");
   }
 }
 
 const char controlPage[] PROGMEM = R"HTML(
 <!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font-family:system-ui;max-width:680px;margin:auto;padding:24px;background:#eef3f7}section{background:white;padding:20px;border-radius:16px;box-shadow:0 5px 20px #0001}button,textarea{font:inherit}button{padding:13px 18px;border:0;border-radius:10px;background:#08784f;color:white}textarea{box-sizing:border-box;width:100%;min-height:120px;padding:12px;margin:8px 0 12px}.warn{color:#805500}</style>
-<h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">La orden crea una vista previa. Google Sheets solo cambia despues de confirmar en Asistente 3C.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="send3c()">Enviar al asistente</button><button onclick="health()">Probar WSL</button><pre id="result"></pre></section>
+<h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">La orden crea una vista previa. Google Sheets solo cambia despues de confirmar en Interfaz Portátil.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="send3c()">Enviar al asistente</button><button onclick="health()">Probar WSL</button><pre id="result"></pre></section>
 <script>async function send3c(){const b=new URLSearchParams({text:document.querySelector('#text').value});const r=await fetch('/api/3c',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b});result.textContent=r.status+' '+await r.text()}async function health(){const r=await fetch('/api/backend-health',{method:'POST'});result.textContent=r.status+' '+await r.text()}</script></html>
 )HTML";
 
