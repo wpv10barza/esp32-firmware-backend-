@@ -1,0 +1,76 @@
+name: migrate-ui-label
+
+on:
+  push:
+    branches:
+      - ui/interfaz-portatil-canonical
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Replace visual label only
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGETS=()
+          for dir in src site public; do
+            if [[ -d "$dir" ]]; then TARGETS+=("$dir"); fi
+          done
+          if [[ ${#TARGETS[@]} -eq 0 ]]; then
+            echo "No visual directories found; aborting."
+            exit 1
+          fi
+
+          echo "Occurrences before:"
+          git grep -niE 'asistente[[:space:]]+3c' -- "${TARGETS[@]}" || true
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          targets = [Path(p) for p in ("src", "site", "public") if Path(p).is_dir()]
+          pattern = re.compile(r"asistente\s+3c", re.IGNORECASE)
+
+          for root in targets:
+              for path in root.rglob("*"):
+                  if not path.is_file():
+                      continue
+                  try:
+                      text = path.read_text(encoding="utf-8")
+                  except (UnicodeDecodeError, OSError):
+                      continue
+                  updated = pattern.sub("Interfaz Portátil", text)
+                  if updated != text:
+                      path.write_text(updated, encoding="utf-8")
+                      print(f"updated: {path}")
+          PY
+
+          echo "Visual diff:"
+          git diff -- src site public 2>/dev/null || git diff -- src site
+
+          if git grep -niE 'asistente[[:space:]]+3c' -- "${TARGETS[@]}"; then
+            echo "ERROR: canonicalization incomplete."
+            exit 1
+          fi
+
+          if git diff --quiet -- src site public 2>/dev/null && git diff --quiet -- src site; then
+            echo "ERROR: no visual changes were produced."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- src site public 2>/dev/null || git add -- src site
+          git commit -m "fix(ui): rename visual label to Interfaz Portátil"
+          git rm .github/workflows/ui-label-migration.yml
+          git commit -m "chore: remove one-shot UI migration workflow"
+          git push origin HEAD:ui/interfaz-portatil-canonical
