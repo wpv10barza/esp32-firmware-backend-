@@ -184,7 +184,7 @@ void drawPanel() {
   const uint16_t accent = stateAccent(panelState);
   display->fillScreen(background);
 
-  drawCentered("ASISTENTE 3C", 14, 2, color565(170, 220, 255));
+  drawCentered("Interfaz Portátil", 14, 2, color565(170, 220, 255));
   display->drawFastHLine(42, 48, 396, color565(95, 120, 135));
   drawCentered(stateLabel(panelState), 62, 3, WHITE);
   drawStateIcon(panelState);
