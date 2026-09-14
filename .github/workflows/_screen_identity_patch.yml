@@ -1,0 +1,39 @@
+name: screen-identity-patch
+
+on:
+  push:
+    branches:
+      - ui/key-screen-validation
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'chore: rename screen identity [skip ci]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui/key-screen-validation
+          fetch-depth: 0
+      - name: Replace screen identity only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/main.cpp')
+          s = p.read_text(encoding='utf-8')
+          old = 'drawCentered("ASISTENTE 3C", 14, 2, color565(170, 220, 255));'
+          new = 'drawCentered("Interfaz Portátil", 14, 2, color565(170, 220, 255));'
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected exactly one screen identity occurrence, found {s.count(old)}')
+          p.write_text(s.replace(old, new), encoding='utf-8')
+          PY
+      - name: Commit source-only change and remove helper workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/main.cpp
+          git rm .github/workflows/_screen_identity_patch.yml
+          git commit -m "chore: rename screen identity [skip ci]"
+          git push origin ui/key-screen-validation
