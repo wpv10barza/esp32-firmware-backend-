@@ -234,9 +234,27 @@ bool initializeAudio() {
   return true;
 }
 
+void runDisplayDiagnostic() {
+  if (!displayReady) return;
+  Serial.println("DISPLAY DIAGNOSTIC: RED");
+  display->fillScreen(color565(255, 0, 0));
+  delay(400);
+  Serial.println("DISPLAY DIAGNOSTIC: GREEN");
+  display->fillScreen(color565(0, 255, 0));
+  delay(400);
+  Serial.println("DISPLAY DIAGNOSTIC: BLUE");
+  display->fillScreen(color565(0, 0, 255));
+  delay(400);
+  Serial.println("DISPLAY DIAGNOSTIC: WHITE");
+  display->fillScreen(color565(255, 255, 255));
+  delay(400);
+}
+
 bool initializeDisplay() {
+  Serial.println("DISPLAY: creating 9-bit SPI command bus");
   displayBus = new Arduino_ESP32SPI(
     GFX_NOT_DEFINED, pins::lcdCs, pins::lcdClock, pins::lcdMosi, GFX_NOT_DEFINED);
+  Serial.println("DISPLAY: creating RGB panel 480x480");
   auto* rgbPanel = new Arduino_ESP32RGBPanel(
     18, 17, 16, 21,
     11, 12, 13, 14, 0,
@@ -244,14 +262,23 @@ bool initializeDisplay() {
     4, 5, 6, 7, 15,
     1, 10, 8, 50,
     1, 10, 8, 20);
+  Serial.println("DISPLAY: using Arduino-GFX ST7701 type8 init sequence");
   display = new Arduino_RGB_Display(
     kScreenWidth, kScreenHeight, rgbPanel, 0, true,
     displayBus, GFX_NOT_DEFINED,
-    tl040wvs03_init_operations, sizeof(tl040wvs03_init_operations));
-  if (!display->begin()) return false;
+    st7701_type8_init_operations, sizeof(st7701_type8_init_operations));
+  Serial.println("DISPLAY: calling display->begin()");
+  if (!display->begin()) {
+    Serial.println("DISPLAY: display->begin() FAILED");
+    return false;
+  }
+  Serial.println("DISPLAY: display->begin() OK");
   pinMode(pins::backlight, OUTPUT);
   analogWrite(pins::backlight, app_config::panelBrightness);
+  Serial.printf("DISPLAY: backlight GPIO %d PWM=%u\n", pins::backlight, app_config::panelBrightness);
   display->displayOn();
+  Serial.println("DISPLAY: displayOn() OK");
+  runDisplayDiagnostic();
   return true;
 }
 
