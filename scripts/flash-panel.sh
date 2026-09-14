@@ -6,16 +6,19 @@ cd "$(dirname "$0")/.."
 ENVIRONMENT="panel_4848s040"
 BAUD="115200"
 PORT=""
+OPEN_MONITOR="false"
 
 usage() {
   cat <<'EOF'
 Uso:
   ./scripts/flash-panel.sh
+  ./scripts/flash-panel.sh --monitor
   ./scripts/flash-panel.sh --port /dev/ttyACM0
-  ./scripts/flash-panel.sh --port /dev/ttyUSB0
+  ./scripts/flash-panel.sh --port /dev/ttyUSB0 --monitor
 
-El script compila el firmware, detecta automáticamente un único puerto serie
-visible en WSL y luego carga el firmware y abre el monitor a 115200 baudios.
+El script compila y carga el firmware. El monitor serie es opcional con --monitor
+para evitar errores cuando el terminal no es interactivo (por ejemplo, tareas
+automatizadas, terminales integradas o scripts de WSL).
 EOF
 }
 
@@ -25,6 +28,10 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || { echo "ERROR: --port requiere una ruta." >&2; exit 64; }
       PORT="$2"
       shift 2
+      ;;
+    --monitor|-m)
+      OPEN_MONITOR="true"
+      shift
       ;;
     --help|-h)
       usage
@@ -84,7 +91,7 @@ if [[ -z "$PORT" ]]; then
     echo
     echo "Diagnóstico en WSL:"
     echo "  pio device list"
-    echo "  lsusb"
+    echo "  command -v lsusb && lsusb || echo 'lsusb no está instalado'"
     echo "  ls -l /dev/ttyACM* /dev/ttyUSB*"
     echo
     echo "Si Windows detecta el ESP32 pero WSL no, adjunte el USB a WSL 2 con usbipd."
@@ -126,5 +133,12 @@ if [[ $STATUS -ne 0 ]]; then
 fi
 
 echo "Carga completada correctamente en $PORT"
-echo "== Monitor serie ($BAUD) =="
-exec pio device monitor --port "$PORT" --baud "$BAUD"
+
+if [[ "$OPEN_MONITOR" == "true" ]]; then
+  echo "== Monitor serie ($BAUD) =="
+  exec pio device monitor --port "$PORT" --baud "$BAUD"
+fi
+
+echo "Monitor no abierto. Para abrirlo manualmente:"
+echo "  pio device monitor --port \"$PORT\" --baud $BAUD"
+echo "  o: ./scripts/flash-panel.sh --port \"$PORT\" --monitor"
