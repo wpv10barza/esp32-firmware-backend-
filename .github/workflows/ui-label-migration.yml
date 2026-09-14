@@ -55,25 +55,22 @@ jobs:
           PY
 
           echo "Diff limited to visual directories:"
-          git diff -- src site public
+          git diff -- src site
 
           if git grep -niE 'asistente[[:space:]]+3c' -- "${TARGETS[@]}"; then
             echo "ERROR: canonicalization incomplete."
             exit 1
           fi
 
-          changed=0
-          if git diff --quiet -- src site public; then
+          if git diff --quiet -- src site; then
             echo "ERROR: no visual changes were produced."
             exit 1
-          else
-            changed=1
           fi
 
           git status --short
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- src site public
+          git add -- src site
           git commit -m "fix(ui): rename visual label to Interfaz Portátil"
           git rm .github/workflows/ui-label-migration.yml
           git commit -m "chore: remove one-shot UI migration workflow"
