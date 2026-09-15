@@ -1,0 +1,68 @@
+name: Apply HTTP transport fix
+
+on:
+  push:
+    branches: [fix/esp32-http-transport-retry]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/esp32-http-transport-retry
+          fetch-depth: 0
+
+      - name: Patch HTTP transport with retry and explicit client
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/main.cpp")
+          text = path.read_text()
+
+          text = text.replace(
+              'constexpr int kScreenHeight = 480;\n',
+              'constexpr int kScreenHeight = 480;\nconstexpr uint8_t kHttpAttempts = 2;\n'
+          )
+
+          old_health = '''  HTTPClient http;\n  http.setTimeout(app_config::httpTimeoutMs);\n  http.begin(endpoint("/api/device/v1/health"));\n  const int code = http.GET();\n  lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n'''
+          new_health = '''  int code = -1;\n  lastBackendMessage = "Sin respuesta del backend";\n  const String url = endpoint("/api/device/v1/health");\n  for (uint8_t attempt = 1; attempt <= kHttpAttempts; ++attempt) {\n    WiFiClient client;\n    HTTPClient http;\n    http.setTimeout(app_config::httpTimeoutMs);\n    if (!http.begin(client, url)) {\n      Serial.printf("[ERROR] transport begin failed attempt=%u url=%s\\n", attempt, url.c_str());\n      lastBackendMessage = "No se pudo abrir conexion HTTP";\n      continue;\n    }\n    code = http.GET();\n    lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);\n    http.end();\n    if (code > 0) break;\n    Serial.printf("[ERROR] transport GET attempt=%u code=%d detail=%s\\n", attempt, code, lastBackendMessage.c_str());\n    delay(150);\n  }\n'''
+          if old_health not in text:
+              raise SystemExit("health block not found")
+          text = text.replace(old_health, new_health, 1)
+
+          old_post = '''  HTTPClient http;\n  http.setTimeout(app_config::httpTimeoutMs);\n  http.begin(endpoint("/api/device/v1/commands"));\n  http.addHeader("Content-Type", "application/json");\n  addDeviceToken(http);\n\n  char randomPart[9];\n  snprintf(randomPart, sizeof(randomPart), "%08lx", static_cast<unsigned long>(esp_random()));\n  const String requestId = String(app_config::deviceId) + "-" + randomPart + "-" + String(millis());\n  const String body = "{\\"device_id\\":\\"" + jsonEscape(app_config::deviceId) +\n    "\\",\\"request_id\\":\\"" + jsonEscape(requestId) +\n    "\\",\\"text\\":\\"" + jsonEscape(command) + "\\"}";\n  const int code = http.POST(body);\n  lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n'''
+          new_post = '''  char randomPart[9];\n  snprintf(randomPart, sizeof(randomPart), "%08lx", static_cast<unsigned long>(esp_random()));\n  const String requestId = String(app_config::deviceId) + "-" + randomPart + "-" + String(millis());\n  const String body = "{\\"device_id\\":\\"" + jsonEscape(app_config::deviceId) +\n    "\\",\\"request_id\\":\\"" + jsonEscape(requestId) +\n    "\\",\\"text\\":\\"" + jsonEscape(command) + "\\"}";\n\n  int code = -1;\n  lastBackendMessage = "Sin respuesta del backend";\n  const String url = endpoint("/api/device/v1/commands");\n  for (uint8_t attempt = 1; attempt <= kHttpAttempts; ++attempt) {\n    WiFiClient client;\n    HTTPClient http;\n    http.setTimeout(app_config::httpTimeoutMs);\n    if (!http.begin(client, url)) {\n      Serial.printf("[ERROR] transport begin failed attempt=%u url=%s\\n", attempt, url.c_str());\n      lastBackendMessage = "No se pudo abrir conexion HTTP";\n      continue;\n    }\n    http.addHeader("Content-Type", "application/json");\n    addDeviceToken(http);\n    code = http.POST(body);\n    lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);\n    http.end();\n    if (code > 0) break;\n    Serial.printf("[ERROR] transport POST attempt=%u code=%d detail=%s\\n", attempt, code, lastBackendMessage.c_str());\n    delay(150);\n  }\n'''
+          if old_post not in text:
+              raise SystemExit("post block not found")
+          text = text.replace(old_post, new_post, 1)
+
+          old_poll = '''  HTTPClient http;\n  http.setTimeout(app_config::httpTimeoutMs);\n  http.begin(endpoint("/api/device/v1/commands/" + lastCommandId));\n  addDeviceToken(http);\n  const int code = http.GET();\n  const String body = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n'''
+          new_poll = '''  int code = -1;\n  String body;\n  const String url = endpoint("/api/device/v1/commands/" + lastCommandId);\n  for (uint8_t attempt = 1; attempt <= kHttpAttempts; ++attempt) {\n    WiFiClient client;\n    HTTPClient http;\n    http.setTimeout(app_config::httpTimeoutMs);\n    if (!http.begin(client, url)) {\n      Serial.printf("[ERROR] transport begin failed attempt=%u url=%s\\n", attempt, url.c_str());\n      continue;\n    }\n    addDeviceToken(http);\n    code = http.GET();\n    body = code > 0 ? http.getString() : http.errorToString(code);\n    http.end();\n    if (code > 0) break;\n    Serial.printf("[ERROR] transport poll attempt=%u code=%d detail=%s\\n", attempt, code, body.c_str());\n    delay(150);\n  }\n'''
+          if old_poll not in text:
+              raise SystemExit("poll block not found")
+          text = text.replace(old_poll, new_poll, 1)
+
+          text = text.replace(
+              'updatePanel(\n    backendAvailable ? PanelState::Ready : PanelState::Error,\n    backendAvailable ? "Endpoint 3C conectado" : String("HTTP ") + code,\n    true);',
+              'updatePanel(\n    backendAvailable ? PanelState::Ready : PanelState::Error,\n    backendAvailable ? "Endpoint 3C conectado" : (code > 0 ? String("HTTP ") + code : "TRANSPORTE SIN CONEXION"),\n    true);',
+              1,
+          )
+
+          path.write_text(text)
+          PY
+
+      - name: Remove temporary patch workflow
+        run: git rm .github/workflows/patch-http-transport.yml
+
+      - name: Commit and push final source fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/main.cpp
+          git commit -m "fix(http): retry transport failures and improve diagnostics"
+          git push origin HEAD:fix/esp32-http-transport-retry
