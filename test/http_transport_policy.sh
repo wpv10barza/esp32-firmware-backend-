@@ -15,7 +15,7 @@ assert_contains() {
 
 assert_contains 'kHttpAttempts = 2' "$SOURCE"
 assert_contains '[ERROR] transport' "$SOURCE"
-assert_contains 'http.begin(WiFiClient' "$SOURCE"
+assert_contains 'http.begin(client' "$SOURCE"
 assert_contains 'commandPollMs = 2500UL' "$CONFIG"
 
 for forbidden in preparedCommand prepare3CCommand cancelPreparedCommand 'CONFIRMAR' 'CANCELAR' '"/confirm"' '"/reject"'; do
