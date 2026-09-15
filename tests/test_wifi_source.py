@@ -17,14 +17,23 @@ require(APP, "WIFI_SSID_VALUE", "Wi-Fi SSID macro")
 require(APP, "WIFI_PASSWORD_VALUE", "Wi-Fi password macro")
 require(APP, "ASSISTANT_BASE_URL_VALUE", "backend URL macro")
 
-# Firmware must use the configured credentials and retry after a disconnect.
+# Firmware must use the configured credentials in STA mode.
+require(MAIN, "WiFi.persistent(false);", "non-persistent Wi-Fi configuration")
+require(MAIN, "WiFi.setAutoReconnect(true);", "automatic reconnect")
 require(MAIN, "WiFi.mode(WIFI_STA);", "station mode")
 require(MAIN, "WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);", "configured Wi-Fi credentials")
-require(MAIN, "WiFi.disconnect();", "Wi-Fi reconnect reset")
+require(MAIN, "WiFi.reconnect();", "Wi-Fi reconnect path")
 require(MAIN, "updatePanel(PanelState::Busy, \"Reconectando Wi-Fi\");", "reconnect state")
 require(MAIN, "WiFi.status() == WL_CONNECTED", "real Wi-Fi state check")
 
-# Diagnostics must not claim the display/backend is fixed by Wi-Fi alone.
+# Reconnect logic must not repeatedly reset the station with WiFi.disconnect().
+if "WiFi.disconnect();" in MAIN:
+    raise AssertionError("reconnect path must use WiFi.reconnect(), not repeated WiFi.disconnect()+WiFi.begin()")
+
+# Diagnostics must expose real connection status without printing credentials.
+require(MAIN, "wifiStatusLabel", "Wi-Fi status diagnostic")
+require(MAIN, "WiFi.gatewayIP().toString()", "gateway diagnostic")
+require(MAIN, "WiFi.RSSI()", "RSSI diagnostic")
 require(MAIN, "GET health ->", "backend health diagnostic")
 require(MAIN, "Wi-Fi listo:", "Wi-Fi acquisition diagnostic")
 
@@ -51,6 +60,7 @@ for forbidden in ["WIFI_PASSWORD_VALUE \"", "ESP32_API_TOKEN_VALUE \""]:
 
 print("Wi-Fi source contract: PASS")
 print("- credentials sourced from ignored local_config.h")
-print("- station mode + reconnect path present")
+print("- STA mode + auto-reconnect + non-destructive reconnect present")
+print("- diagnostic exposes status/gateway/RSSI without credentials")
 print("- backend URL is not hard-coded to loopback")
 print("- ST7701 type8 init preserved")
