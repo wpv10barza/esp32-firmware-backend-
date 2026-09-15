@@ -288,6 +288,7 @@ void updatePanel(PanelState state, const String& detail, bool sound = false) {
   panelState = state;
   panelDetail = detail;
   drawPanel();
+  Serial.printf("[STATE] %s\n", stateLabel(state));
   if (!sound || !changed) return;
   if (state == PanelState::Applied || state == PanelState::Ready) playTone(880, 70);
   else if (state == PanelState::Pending || state == PanelState::Busy) playTone(620, 55);
@@ -468,6 +469,9 @@ bool checkBackendHealth() {
   lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
   backendAvailable = code == 200;
+  Serial.printf("[BACKEND] GET /api/device/v1/health http=%d result=%s\n",
+    code, backendAvailable ? "ok" : "error");
+  if (code != 200) Serial.printf("[ERROR] backend health http=%d\n", code);
   updatePanel(
     backendAvailable ? PanelState::Ready : PanelState::Error,
     backendAvailable ? "Endpoint 3C conectado" : String("HTTP ") + code,
@@ -504,14 +508,24 @@ int send3CCommand(const String& rawCommand) {
   const int code = http.POST(body);
   lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
+  Serial.printf("[COMMAND] POST /api/device/v1/commands http=%d\n", code);
 
   if (code == 200 || code == 202) {
     backendAvailable = true;
     lastCommandId = jsonStringValue(lastBackendMessage, "command_id");
+    if (lastCommandId.length()) {
+      String shortCommandId = lastCommandId;
+      if (shortCommandId.length() > 12) shortCommandId = shortCommandId.substring(0, 8) + "..." + shortCommandId.substring(shortCommandId.length() - 4);
+      Serial.printf("[COMMAND] command_id=%s\n", shortCommandId.c_str());
+      Serial.printf("[POLL] interval_ms=%lu\n", app_config::commandPollMs);
+    } else {
+      Serial.println("[ERROR] command_id missing from response");
+    }
     lastCommandPoll = millis();
     updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);
   } else {
     backendAvailable = false;
+    Serial.printf("[ERROR] command HTTP unexpected=%d\n", code);
     updatePanel(PanelState::Error, String("Envio HTTP ") + code, true);
   }
   Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
@@ -527,12 +541,19 @@ void pollCommandStatus() {
   const int code = http.GET();
   const String body = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
+  String shortCommandId = lastCommandId;
+  if (shortCommandId.length() > 12) shortCommandId = shortCommandId.substring(0, 8) + "..." + shortCommandId.substring(shortCommandId.length() - 4);
+  Serial.printf("[POLL] GET /api/device/v1/commands/%s http=%d\n",
+    shortCommandId.c_str(), code);
   if (code != 200) {
-    Serial.printf("GET command status -> %d %s\n", code, body.c_str());
+    Serial.printf("[ERROR] poll HTTP unexpected=%d\n", code);
     return;
   }
   const String status = jsonStringValue(body, "status");
   const String result = jsonStringValue(body, "result");
+  Serial.printf("[POLL] status=%s\n", status.length() ? status.c_str() : "<missing>");
+  if (result.length()) Serial.println("[POLL] result=present");
+  if (!status.length()) Serial.println("[ERROR] command status missing from response");
   if (status == "applied") {
     updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en WSL", true);
     lastCommandId = "";
@@ -577,10 +598,12 @@ void configureWebServer() {
 
 void connectWifi() {
   if (!strlen(app_config::wifiSsid)) {
+    Serial.println("[ERROR] Wi-Fi configuration missing");
     updatePanel(PanelState::Offline, "Configure local_config.h");
     Serial.println("Configure include/local_config.h antes de usar Wi-Fi.");
     return;
   }
+  Serial.println("[WIFI] connect requested");
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(app_config::deviceId);
   WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
@@ -602,6 +625,7 @@ void handleTouch() {
 void setup() {
   Serial.begin(115200);
   delay(250);
+  Serial.printf("[BOOT] firmware=ESP32-4848S040-3C\n");
   Serial.printf("ESP32-4848S040 3C | PSRAM: %s | %u bytes\n",
     psramFound() ? "OK" : "NO", ESP.getPsramSize());
 
@@ -622,6 +646,8 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiAnnounced) {
       wifiAnnounced = true;
+      Serial.println("[WIFI] connected");
+      Serial.printf("[WIFI] ip=%s\n", WiFi.localIP().toString().c_str());
       Serial.printf("Wi-Fi listo: http://%s/\n", WiFi.localIP().toString().c_str());
       if (!mdnsReady) {
         mdnsReady = MDNS.begin("esp32-panel-3c");
@@ -641,6 +667,7 @@ void loop() {
     wifiAnnounced = false;
     if (strlen(app_config::wifiSsid) && millis() - lastWifiAttempt >= app_config::wifiRetryMs) {
       lastWifiAttempt = millis();
+      Serial.println("[WIFI] disconnected; retrying");
       WiFi.disconnect();
       WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
       updatePanel(PanelState::Busy, "Reconectando Wi-Fi");
