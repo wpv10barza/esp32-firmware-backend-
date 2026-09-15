@@ -1,0 +1,82 @@
+name: Block 3 instrumentation
+
+on:
+  push:
+    branches: [ui/monitor-hmi-v2]
+
+permissions:
+  contents: write
+
+jobs:
+  instrument:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply serial telemetry
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path("src/main.cpp")
+          text = path.read_text(encoding="utf-8")
+          replacements = [
+            (
+              '  Serial.printf("ESP32-4848S040 3C | PSRAM: %s | %u bytes\\n",\n    psramFound() ? "OK" : "NO", ESP.getPsramSize());',
+              '  Serial.printf("[BOOT] firmware=ESP32-4848S040-3C\\n");\n  Serial.printf("ESP32-4848S040 3C | PSRAM: %s | %u bytes\\n",\n    psramFound() ? "OK" : "NO", ESP.getPsramSize());'
+            ),
+            (
+              '  drawPanel();\n  if (!sound || !changed) return;',
+              '  drawPanel();\n  Serial.printf("[STATE] %s\\n", stateLabel(state));\n  if (!sound || !changed) return;'
+            ),
+            (
+              '  const int code = http.GET();\n  lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n  backendAvailable = code == 200;',
+              '  const int code = http.GET();\n  lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n  backendAvailable = code == 200;\n  Serial.printf("[BACKEND] GET /api/device/v1/health http=%d result=%s\\n",\n    code, backendAvailable ? "ok" : "error");\n  if (code != 200) Serial.printf("[ERROR] backend health http=%d\\n", code);'
+            ),
+            (
+              '  const int code = http.POST(body);\n  lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n\n  if (code == 200 || code == 202) {',
+              '  const int code = http.POST(body);\n  lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n  Serial.printf("[COMMAND] POST /api/device/v1/commands http=%d\\n", code);\n\n  if (code == 200 || code == 202) {'
+            ),
+            (
+              '    lastCommandId = jsonStringValue(lastBackendMessage, "command_id");\n    lastCommandPoll = millis();\n    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);',
+              '    lastCommandId = jsonStringValue(lastBackendMessage, "command_id");\n    if (lastCommandId.length()) {\n      String shortCommandId = lastCommandId;\n      if (shortCommandId.length() > 12) shortCommandId = shortCommandId.substring(0, 8) + "..." + shortCommandId.substring(shortCommandId.length() - 4);\n      Serial.printf("[COMMAND] command_id=%s\\n", shortCommandId.c_str());\n      Serial.printf("[POLL] interval_ms=%lu\\n", app_config::commandPollMs);\n    } else {\n      Serial.println("[ERROR] command_id missing from response");\n    }\n    lastCommandPoll = millis();\n    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);'
+            ),
+            (
+              '  } else {\n    backendAvailable = false;\n    updatePanel(PanelState::Error, String("Envio HTTP ") + code, true);\n  }\n  Serial.printf("POST 3C -> %d %s\\n", code, lastBackendMessage.c_str());',
+              '  } else {\n    backendAvailable = false;\n    Serial.printf("[ERROR] command HTTP unexpected=%d\\n", code);\n    updatePanel(PanelState::Error, String("Envio HTTP ") + code, true);\n  }\n  Serial.printf("POST 3C -> %d %s\\n", code, lastBackendMessage.c_str());'
+            ),
+            (
+              '  const int code = http.GET();\n  const String body = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n  if (code != 200) {\n    Serial.printf("GET command status -> %d %s\\n", code, body.c_str());\n    return;\n  }\n  const String status = jsonStringValue(body, "status");\n  const String result = jsonStringValue(body, "result");',
+              '  const int code = http.GET();\n  const String body = code > 0 ? http.getString() : http.errorToString(code);\n  http.end();\n  String shortCommandId = lastCommandId;\n  if (shortCommandId.length() > 12) shortCommandId = shortCommandId.substring(0, 8) + "..." + shortCommandId.substring(shortCommandId.length() - 4);\n  Serial.printf("[POLL] GET /api/device/v1/commands/%s http=%d\\n",\n    shortCommandId.c_str(), code);\n  if (code != 200) {\n    Serial.printf("[ERROR] poll HTTP unexpected=%d\\n", code);\n    return;\n  }\n  const String status = jsonStringValue(body, "status");\n  const String result = jsonStringValue(body, "result");\n  Serial.printf("[POLL] status=%s\\n", status.length() ? status.c_str() : "<missing>");\n  if (result.length()) Serial.println("[POLL] result=present");\n  if (!status.length()) Serial.println("[ERROR] command status missing from response");'
+            ),
+            (
+              '  if (!strlen(app_config::wifiSsid)) {\n    updatePanel(PanelState::Offline, "Configure local_config.h");',
+              '  if (!strlen(app_config::wifiSsid)) {\n    Serial.println("[ERROR] Wi-Fi configuration missing");\n    updatePanel(PanelState::Offline, "Configure local_config.h");'
+            ),
+            (
+              '  WiFi.mode(WIFI_STA);\n  WiFi.setHostname(app_config::deviceId);',
+              '  Serial.println("[WIFI] connect requested");\n  WiFi.mode(WIFI_STA);\n  WiFi.setHostname(app_config::deviceId);'
+            ),
+            (
+              '    if (!wifiAnnounced) {\n      wifiAnnounced = true;\n      Serial.printf("Wi-Fi listo: http://%s/\\n", WiFi.localIP().toString().c_str());',
+              '    if (!wifiAnnounced) {\n      wifiAnnounced = true;\n      Serial.println("[WIFI] connected");\n      Serial.printf("[WIFI] ip=%s\\n", WiFi.localIP().toString().c_str());\n      Serial.printf("Wi-Fi listo: http://%s/\\n", WiFi.localIP().toString().c_str());'
+            ),
+            (
+              '      lastWifiAttempt = millis();\n      WiFi.disconnect();\n      WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);\n      updatePanel(PanelState::Busy, "Reconectando Wi-Fi");',
+              '      lastWifiAttempt = millis();\n      Serial.println("[WIFI] disconnected; retrying");\n      WiFi.disconnect();\n      WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);\n      updatePanel(PanelState::Busy, "Reconectando Wi-Fi");'
+            ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"replacement count={count}: {old[:90]!r}")
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+      - name: Commit telemetry and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/block3-instrument.yml
+          git add src/main.cpp .github/workflows/block3-instrument.yml
+          git commit -m "feat(serial): add firmware telemetry for end-to-end tracing"
+          git push origin HEAD:ui/monitor-hmi-v2
