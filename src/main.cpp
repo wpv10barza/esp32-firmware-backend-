@@ -25,11 +25,12 @@ constexpr int audioData = 40;
 }  // namespace pins
 
 namespace {
-constexpr uint8_t kTouchAddress = 0x5D;
+constexpr uint8_t kTouchAddress = 0x5D;  // GT911
 constexpr uint16_t kTouchStatusRegister = 0x814E;
 constexpr uint16_t kTouchPointRegister = 0x814F;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
+constexpr unsigned long kTouchDebounceMs = 220UL;
 
 WebServer web(80);
 Arduino_ESP32SPI* displayBus = nullptr;
@@ -40,6 +41,7 @@ enum class PanelState {
   Offline,
   Ready,
   Busy,
+  AwaitingConfirmation,
   Pending,
   Applied,
   Rejected,
@@ -50,9 +52,11 @@ PanelState panelState = PanelState::Booting;
 String panelDetail = "Iniciando";
 String lastBackendMessage = "Sin verificar";
 String lastCommandId;
+String preparedCommand;
 unsigned long lastWifiAttempt = 0;
 unsigned long lastHealthCheck = 0;
 unsigned long lastCommandPoll = 0;
+unsigned long lastTouchAction = 0;
 bool backendAvailable = false;
 bool displayReady = false;
 bool audioReady = false;
@@ -77,6 +81,7 @@ const char* stateLabel(PanelState state) {
     case PanelState::Offline: return "SIN CONEXION";
     case PanelState::Ready: return "WSL DISPONIBLE";
     case PanelState::Busy: return "PROCESANDO";
+    case PanelState::AwaitingConfirmation: return "REQUIERE CONFIRMACION";
     case PanelState::Pending: return "PENDIENTE";
     case PanelState::Applied: return "APLICADO";
     case PanelState::Rejected: return "RECHAZADO";
@@ -89,6 +94,7 @@ uint16_t stateBackground(PanelState state) {
   switch (state) {
     case PanelState::Ready: return color565(5, 45, 27);
     case PanelState::Busy: return color565(8, 28, 58);
+    case PanelState::AwaitingConfirmation: return color565(58, 42, 5);
     case PanelState::Pending: return color565(68, 43, 2);
     case PanelState::Applied: return color565(2, 65, 28);
     case PanelState::Rejected: return color565(62, 29, 3);
@@ -97,6 +103,14 @@ uint16_t stateBackground(PanelState state) {
     case PanelState::Booting: return color565(10, 18, 38);
   }
   return 0;
+}
+
+void drawText(const String& text, int x, int y, uint8_t size, uint16_t color) {
+  if (!displayReady) return;
+  display->setTextSize(size);
+  display->setTextColor(color);
+  display->setCursor(x, y);
+  display->print(text);
 }
 
 void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
@@ -109,9 +123,7 @@ void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
   display->getTextBounds(text, 0, y, &x1, &y1, &width, &height);
   int x = (kScreenWidth - static_cast<int>(width)) / 2;
   if (x < 4) x = 4;
-  display->setTextColor(color);
-  display->setCursor(x, y);
-  display->print(text);
+  drawText(text, x, y, size, color);
 }
 
 void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
@@ -129,43 +141,82 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
   display->print(label);
 }
 
+String shorten(const String& input, size_t maxLength) {
+  if (input.length() <= maxLength) return input;
+  if (maxLength < 4) return input.substring(0, maxLength);
+  return input.substring(0, maxLength - 3) + "...";
+}
+
+void drawMultilinePreview(const String& command) {
+  String value = command;
+  value.replace("\r", " ");
+  value.replace("\n", " ");
+  const String first = shorten(value, 42);
+  String second;
+  if (value.length() > 42) second = shorten(value.substring(42), 42);
+  drawText(first, 28, 156, 2, WHITE);
+  if (second.length()) drawText(second, 28, 182, 2, WHITE);
+}
+
 void drawPanel() {
   if (!displayReady) return;
   const uint16_t background = stateBackground(panelState);
-  const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
+  const uint16_t panel = color565(17, 26, 36);
+  const uint16_t panelAlt = color565(13, 21, 30);
+  const uint16_t border = color565(62, 82, 100);
+  const uint16_t titleColor = color565(170, 220, 255);
+  const uint16_t labelColor = color565(145, 170, 190);
+  const bool online = WiFi.status() == WL_CONNECTED && backendAvailable;
+
   display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
+  display->fillRect(0, 0, kScreenWidth, 56, panel);
+  drawCentered("Interfaz Portátil", 16, 2, titleColor);
+  display->drawFastHLine(0, 56, kScreenWidth, border);
+  display->fillCircle(380, 28, 6, online ? color565(60, 200, 150) : color565(185, 100, 90));
+  drawText(online ? "ONLINE" : "OFFLINE", 392, 21, 2, WHITE);
 
-  if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
-    display->drawLine(112, 105, 172, 165, eye);
-    display->drawLine(172, 105, 112, 165, eye);
-    display->drawLine(308, 105, 368, 165, eye);
-    display->drawLine(368, 105, 308, 165, eye);
-  } else if (panelState == PanelState::Applied) {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
-    display->drawLine(205, 205, 225, 218, eye);
-    display->drawLine(225, 218, 255, 218, eye);
-    display->drawLine(255, 218, 275, 205, eye);
-  } else {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
+  if (panelState == PanelState::AwaitingConfirmation) {
+    display->fillRoundRect(16, 74, 448, 250, 14, panelAlt);
+    display->drawRoundRect(16, 74, 448, 250, 14, border);
+    drawCentered("CONFIRMA LA ORDEN", 92, 2, color565(245, 215, 120));
+    drawCentered("No se enviara al backend", 120, 1, labelColor);
+    drawMultilinePreview(preparedCommand);
+    drawCentered("Presiona CONFIRMAR para autorizar", 224, 1, labelColor);
+    drawCentered("el POST /commands", 242, 1, labelColor);
+    drawButton(16, 348, 214, 82, "CANCELAR", color565(118, 45, 45));
+    drawButton(250, 348, 214, 82, "CONFIRMAR", color565(18, 105, 73));
+    return;
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
-  String detail = panelDetail;
-  if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
-  if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
-  }
+  display->fillRoundRect(16, 72, 448, 92, 12, panelAlt);
+  display->drawRoundRect(16, 72, 448, 92, 12, border);
+  drawText("BACKEND", 30, 86, 1, labelColor);
+  drawText(backendAvailable ? "WSL DISPONIBLE" : "SIN CONEXION", 30, 106, 2,
+    backendAvailable ? color565(70, 205, 155) : color565(205, 120, 115));
+  drawText("IP / DISPOSITIVO", 30, 133, 1, labelColor);
+  drawText(WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "--", 30, 148, 1, WHITE);
+  drawText(app_config::deviceId, 220, 148, 1, WHITE);
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  display->fillRoundRect(16, 178, 448, 116, 12, panel);
+  display->drawRoundRect(16, 178, 448, 116, 12, border);
+  drawText("ESTADO DE VALIDACION", 30, 193, 1, labelColor);
+  drawText(stateLabel(panelState), 30, 214, 2, WHITE);
+  drawText(shorten(panelDetail, 55), 30, 242, 1, color565(210, 225, 235));
+  drawText("command_id: ", 30, 266, 1, labelColor);
+  drawText(lastCommandId.length() ? shorten(lastCommandId, 22) : "--", 112, 266, 1, WHITE);
+
+  display->fillRoundRect(16, 308, 448, 55, 12, panelAlt);
+  display->drawRoundRect(16, 308, 448, 55, 12, border);
+  drawText("RESULTADO", 30, 322, 1, labelColor);
+  const uint16_t resultColor = panelState == PanelState::Applied ? color565(75, 215, 150) :
+    panelState == PanelState::Rejected ? color565(235, 160, 100) :
+    panelState == PanelState::Error ? color565(240, 115, 110) :
+    panelState == PanelState::Pending ? color565(235, 195, 95) : WHITE;
+  drawText(stateLabel(panelState), 112, 341, 2, resultColor);
+
+  display->drawFastHLine(16, 382, 448, border);
+  drawButton(16, 398, 214, 66, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(250, 398, 214, 66, "ENVIAR 3C", color565(18, 105, 73));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -196,9 +247,10 @@ void updatePanel(PanelState state, const String& detail, bool sound = false) {
   panelState = state;
   panelDetail = detail;
   drawPanel();
+  Serial.printf("[STATE] %s\n", stateLabel(state));
   if (!sound || !changed) return;
   if (state == PanelState::Applied || state == PanelState::Ready) playTone(880, 70);
-  else if (state == PanelState::Pending || state == PanelState::Busy) playTone(620, 55);
+  else if (state == PanelState::AwaitingConfirmation || state == PanelState::Pending || state == PanelState::Busy) playTone(620, 55);
   else if (state == PanelState::Rejected || state == PanelState::Error) playTone(220, 110);
 }
 
@@ -238,23 +290,22 @@ void runDisplayDiagnostic() {
   if (!displayReady) return;
   Serial.println("DISPLAY DIAGNOSTIC: RED");
   display->fillScreen(color565(255, 0, 0));
-  delay(400);
+  delay(250);
   Serial.println("DISPLAY DIAGNOSTIC: GREEN");
   display->fillScreen(color565(0, 255, 0));
-  delay(400);
+  delay(250);
   Serial.println("DISPLAY DIAGNOSTIC: BLUE");
   display->fillScreen(color565(0, 0, 255));
-  delay(400);
+  delay(250);
   Serial.println("DISPLAY DIAGNOSTIC: WHITE");
   display->fillScreen(color565(255, 255, 255));
-  delay(400);
+  delay(250);
 }
 
 bool initializeDisplay() {
   Serial.println("DISPLAY: creating 9-bit SPI command bus");
   displayBus = new Arduino_ESP32SPI(
     GFX_NOT_DEFINED, pins::lcdCs, pins::lcdClock, pins::lcdMosi, GFX_NOT_DEFINED);
-  Serial.println("DISPLAY: creating RGB panel 480x480");
   auto* rgbPanel = new Arduino_ESP32RGBPanel(
     18, 17, 16, 21,
     11, 12, 13, 14, 0,
@@ -262,22 +313,17 @@ bool initializeDisplay() {
     4, 5, 6, 7, 15,
     1, 10, 8, 50,
     1, 10, 8, 20);
-  Serial.println("DISPLAY: using Arduino-GFX ST7701 type8 init sequence");
   display = new Arduino_RGB_Display(
     kScreenWidth, kScreenHeight, rgbPanel, 0, true,
     displayBus, GFX_NOT_DEFINED,
     st7701_type8_init_operations, sizeof(st7701_type8_init_operations));
-  Serial.println("DISPLAY: calling display->begin()");
   if (!display->begin()) {
     Serial.println("DISPLAY: display->begin() FAILED");
     return false;
   }
-  Serial.println("DISPLAY: display->begin() OK");
   pinMode(pins::backlight, OUTPUT);
   analogWrite(pins::backlight, app_config::panelBrightness);
-  Serial.printf("DISPLAY: backlight GPIO %d PWM=%u\n", pins::backlight, app_config::panelBrightness);
   display->displayOn();
-  Serial.println("DISPLAY: displayOn() OK");
   runDisplayDiagnostic();
   return true;
 }
@@ -376,27 +422,40 @@ bool checkBackendHealth() {
   lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
   backendAvailable = code == 200;
-  updatePanel(
-    backendAvailable ? PanelState::Ready : PanelState::Error,
-    backendAvailable ? "Endpoint 3C conectado" : String("HTTP ") + code,
-    true);
+  updatePanel(backendAvailable ? PanelState::Ready : PanelState::Error,
+    backendAvailable ? "Endpoint 3C conectado" : String("HTTP ") + code, true);
   Serial.printf("GET health -> %d %s\n", code, lastBackendMessage.c_str());
   return backendAvailable;
 }
 
-int send3CCommand(const String& rawCommand) {
+void prepare3CCommand(const String& rawCommand) {
   String command = rawCommand;
   command.trim();
   if (!command.length()) {
     updatePanel(PanelState::Error, "Comando vacio", true);
-    return 400;
+    return;
   }
+  preparedCommand = command;
+  updatePanel(PanelState::AwaitingConfirmation, "Revision humana en panel", true);
+  Serial.printf("[CONFIRM] command prepared; chars=%u\n", static_cast<unsigned>(preparedCommand.length()));
+}
+
+void cancelPreparedCommand() {
+  if (!preparedCommand.length()) return;
+  preparedCommand = "";
+  updatePanel(backendAvailable ? PanelState::Ready : PanelState::Offline,
+    "Orden cancelada en panel", true);
+  Serial.println("[CONFIRM] cancelled on panel; no POST sent");
+}
+
+int postPreparedCommand() {
+  if (!preparedCommand.length()) return 400;
   if (WiFi.status() != WL_CONNECTED) {
     updatePanel(PanelState::Offline, "Wi-Fi desconectado", true);
     return 503;
   }
-
-  updatePanel(PanelState::Busy, "Enviando vista previa", true);
+  updatePanel(PanelState::Busy, "Enviando orden confirmada", true);
+  const String command = preparedCommand;
   HTTPClient http;
   http.setTimeout(app_config::httpTimeoutMs);
   http.begin(endpoint("/api/device/v1/commands"));
@@ -412,17 +471,18 @@ int send3CCommand(const String& rawCommand) {
   const int code = http.POST(body);
   lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
+  preparedCommand = "";
 
+  Serial.printf("[COMMAND] POST /api/device/v1/commands http=%d\n", code);
   if (code == 200 || code == 202) {
     backendAvailable = true;
     lastCommandId = jsonStringValue(lastBackendMessage, "command_id");
     lastCommandPoll = millis();
-    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);
+    updatePanel(PanelState::Pending,
+      "PENDIENTE: esperando validacion del backend", true);
   } else {
-    backendAvailable = false;
     updatePanel(PanelState::Error, String("Envio HTTP ") + code, true);
   }
-  Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
   return code;
 }
 
@@ -435,31 +495,31 @@ void pollCommandStatus() {
   const int code = http.GET();
   const String body = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
-  if (code != 200) {
-    Serial.printf("GET command status -> %d %s\n", code, body.c_str());
-    return;
-  }
+  Serial.printf("[POLL] GET /api/device/v1/commands/{command_id} http=%d\n", code);
+  if (code != 200) return;
+
   const String status = jsonStringValue(body, "status");
   const String result = jsonStringValue(body, "result");
-  if (status == "applied") {
-    updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en WSL", true);
+  Serial.printf("[POLL] status=%s\n", status.length() ? status.c_str() : "<missing>");
+  if (status == "applied" || status == "aplicado") {
+    updatePanel(PanelState::Applied, result.length() ? result : "Comando aplicado", true);
     lastCommandId = "";
-  } else if (status == "rejected") {
-    updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en WSL", true);
+  } else if (status == "rejected" || status == "rechazado") {
+    updatePanel(PanelState::Rejected, result.length() ? result : "Comando rechazado", true);
     lastCommandId = "";
   } else if (status == "error" || status == "failed" || status == "fallido") {
-    updatePanel(PanelState::Error, result.length() ? result : "Error reportado por WSL", true);
+    updatePanel(PanelState::Error, result.length() ? result : "Error reportado por backend", true);
     lastCommandId = "";
   } else if (status == "pending_confirmation" || status == "pending" || status == "pendiente") {
-    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB");
+    updatePanel(PanelState::Pending, "PENDIENTE: confirmacion/procesamiento backend");
   }
 }
 
 const char controlPage[] PROGMEM = R"HTML(
 <!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{font-family:system-ui;max-width:680px;margin:auto;padding:24px;background:#eef3f7}section{background:white;padding:20px;border-radius:16px;box-shadow:0 5px 20px #0001}button,textarea{font:inherit}button{padding:13px 18px;border:0;border-radius:10px;background:#08784f;color:white}textarea{box-sizing:border-box;width:100%;min-height:120px;padding:12px;margin:8px 0 12px}.warn{color:#805500}</style>
-<h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">La orden se envía al backend y queda pendiente de confirmación en la web. Google Sheets cambia solo después de la confirmación web.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="send3c()">Enviar al asistente</button><button onclick="health()">Probar WSL</button><pre id="result"></pre></section>
-<script>async function send3c(){const b=new URLSearchParams({text:document.querySelector('#text').value});const r=await fetch('/api/3c',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b});result.textContent=r.status+' '+await r.text()}async function health(){const r=await fetch('/api/backend-health',{method:'POST'});result.textContent=r.status+' '+await r.text()}</script></html>
+<style>body{font-family:system-ui;max-width:680px;margin:auto;padding:24px;background:#eef3f7}section{background:white;padding:20px;border-radius:16px;box-shadow:0 5px 20px #0001}button,textarea{font:inherit}button{padding:13px 18px;border:0;border-radius:10px;background:#08784f;color:white;margin-right:8px}textarea{box-sizing:border-box;width:100%;min-height:120px;padding:12px;margin:8px 0 12px}.warn{color:#805500}</style>
+<h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">Esta pagina solo prepara una orden. El panel fisico debe mostrarla y una persona debe pulsar CONFIRMAR antes del POST al backend. Cancelar en el panel descarta la orden.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="prepare3c()">Preparar orden</button><button onclick="health()">Probar WSL</button><pre id="result"></pre></section>
+<script>async function prepare3c(){const b=new URLSearchParams({text:document.querySelector('#text').value});const r=await fetch('/api/3c',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b});result.textContent=r.status+' '+await r.text()}async function health(){const r=await fetch('/api/backend-health',{method:'POST'});result.textContent=r.status+' '+await r.text()}</script></html>
 )HTML";
 
 void configureWebServer() {
@@ -469,6 +529,7 @@ void configureWebServer() {
       (WiFi.status() == WL_CONNECTED ? "true" : "false") +
       ",\"backend\":" + (backendAvailable ? "true" : "false") +
       ",\"pending\":" + (lastCommandId.length() ? "true" : "false") +
+      ",\"confirmation_required\":" + (preparedCommand.length() ? "true" : "false") +
       ",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
     web.send(200, "application/json", body);
   });
@@ -476,8 +537,14 @@ void configureWebServer() {
     web.send(checkBackendHealth() ? 200 : 502, "application/json", lastBackendMessage);
   });
   web.on("/api/3c", HTTP_POST, [] {
-    const int code = send3CCommand(web.arg("text"));
-    web.send(code == 200 || code == 202 ? 202 : 502, "application/json", lastBackendMessage);
+    const String text = web.arg("text");
+    prepare3CCommand(text);
+    const bool readyForPanel = preparedCommand.length() > 0;
+    const String body = String("{\"confirmation_required\":") +
+      (readyForPanel ? "true" : "false") +
+      ",\"message\":\"" +
+      (readyForPanel ? "Confirmar en panel fisico" : "Comando vacio") + "\"}";
+    web.send(readyForPanel ? 202 : 400, "application/json", body);
   });
   web.onNotFound([] { web.send(404, "application/json", "{\"error\":\"not found\"}"); });
   web.begin();
@@ -511,8 +578,6 @@ void connectWifi() {
     return;
   }
   configureWifi();
-  Serial.printf("Wi-Fi: iniciando STA, credenciales presentes, status=%d (%s)\n",
-    static_cast<int>(WiFi.status()), wifiStatusLabel(WiFi.status()));
   WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
   lastWifiAttempt = millis();
   updatePanel(PanelState::Busy, "Conectando Wi-Fi");
@@ -521,9 +586,18 @@ void connectWifi() {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
-    if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::defaultCommand);
+  const bool edge = sample.touched && !touchDown;
+  if (edge && millis() - lastTouchAction >= kTouchDebounceMs) {
+    lastTouchAction = millis();
+    if (panelState == PanelState::AwaitingConfirmation) {
+      if (sample.y >= 330) {
+        if (sample.x < 240) cancelPreparedCommand();
+        else postPreparedCommand();
+      }
+    } else if (sample.y >= 390) {
+      if (sample.x < 240) checkBackendHealth();
+      else prepare3CCommand(app_config::defaultCommand);
+    }
   }
   touchDown = sample.touched;
 }
@@ -532,6 +606,7 @@ void handleTouch() {
 void setup() {
   Serial.begin(115200);
   delay(250);
+  Serial.printf("[BOOT] firmware=ESP32-4848S040-panel-confirmation\n");
   Serial.printf("ESP32-4848S040 3C | PSRAM: %s | %u bytes\n",
     psramFound() ? "OK" : "NO", ESP.getPsramSize());
 
@@ -552,7 +627,7 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiAnnounced) {
       wifiAnnounced = true;
-      Serial.printf("Wi-Fi listo: http://%s/ gateway=%s rssi=%d\n",
+      Serial.printf("[WIFI] connected ip=%s gateway=%s rssi=%d\n",
         WiFi.localIP().toString().c_str(), WiFi.gatewayIP().toString().c_str(), WiFi.RSSI());
       if (!mdnsReady) {
         mdnsReady = MDNS.begin("esp32-panel-3c");
@@ -564,7 +639,7 @@ void loop() {
       lastCommandPoll = millis();
       pollCommandStatus();
     }
-    if (!lastCommandId.length() && millis() - lastHealthCheck >= app_config::healthCheckMs) {
+    if (!lastCommandId.length() && !preparedCommand.length() && millis() - lastHealthCheck >= app_config::healthCheckMs) {
       lastHealthCheck = millis();
       checkBackendHealth();
     }
@@ -572,9 +647,8 @@ void loop() {
     wifiAnnounced = false;
     if (strlen(app_config::wifiSsid) && millis() - lastWifiAttempt >= app_config::wifiRetryMs) {
       lastWifiAttempt = millis();
-      const wl_status_t status = WiFi.status();
-      Serial.printf("Wi-Fi no conectado: status=%d (%s); reintentando con WiFi.reconnect()\n",
-        static_cast<int>(status), wifiStatusLabel(status));
+      Serial.printf("Wi-Fi no conectado: status=%d (%s); reintentando\n",
+        static_cast<int>(WiFi.status()), wifiStatusLabel(WiFi.status()));
       WiFi.reconnect();
       updatePanel(PanelState::Busy, "Reconectando Wi-Fi");
     }

@@ -28,6 +28,8 @@ jobs:
           ! git ls-files | grep -Ei 'credentials|service-account|\.env$'
       - name: Test Wi-Fi source contract
         run: python tests/test_wifi_source.py
+      - name: Test panel confirmation contract
+        run: python tests/test_panel_confirmation.py
       - name: Install PlatformIO
         run: pip install platformio==6.2.0
       - name: Verify PlatformIO Core
