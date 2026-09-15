@@ -26,8 +26,12 @@ jobs:
         run: |
           test ! -f include/local_config.h
           ! git ls-files | grep -Ei 'credentials|service-account|\.env$'
+      - name: Test Wi-Fi source contract
+        run: python tests/test_wifi_source.py
       - name: Install PlatformIO
-        run: pip install platformio==6.1.18
+        run: pip install platformio==6.2.0
+      - name: Verify PlatformIO Core
+        run: pio --version
       - name: Compile ESP32-S3-4848S040
         run: pio run --environment panel_4848s040
       - name: Package reproducible binaries
