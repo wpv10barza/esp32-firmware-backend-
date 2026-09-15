@@ -77,9 +77,9 @@ const char* stateLabel(PanelState state) {
     case PanelState::Offline: return "SIN CONEXION";
     case PanelState::Ready: return "WSL DISPONIBLE";
     case PanelState::Busy: return "PROCESANDO";
-    case PanelState::Pending: return "ESPERA CONFIRMACION";
-    case PanelState::Applied: return "CAMBIO APLICADO";
-    case PanelState::Rejected: return "ORDEN CANCELADA";
+    case PanelState::Pending: return "PENDIENTE";
+    case PanelState::Applied: return "APLICADO";
+    case PanelState::Rejected: return "RECHAZADO";
     case PanelState::Error: return "ERROR";
   }
   return "3C";
@@ -417,7 +417,7 @@ int send3CCommand(const String& rawCommand) {
     backendAvailable = true;
     lastCommandId = jsonStringValue(lastBackendMessage, "command_id");
     lastCommandPoll = millis();
-    updatePanel(PanelState::Pending, "Confirme en Interfaz Portátil", true);
+    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);
   } else {
     backendAvailable = false;
     updatePanel(PanelState::Error, String("Envio HTTP ") + code, true);
@@ -445,17 +445,20 @@ void pollCommandStatus() {
     updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en WSL", true);
     lastCommandId = "";
   } else if (status == "rejected") {
-    updatePanel(PanelState::Rejected, result.length() ? result : "Cancelado en WSL", true);
+    updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en WSL", true);
     lastCommandId = "";
-  } else if (status == "pending_confirmation" && panelState != PanelState::Pending) {
-    updatePanel(PanelState::Pending, "Confirme en Interfaz Portátil");
+  } else if (status == "error" || status == "failed" || status == "fallido") {
+    updatePanel(PanelState::Error, result.length() ? result : "Error reportado por WSL", true);
+    lastCommandId = "";
+  } else if (status == "pending_confirmation" || status == "pending" || status == "pendiente") {
+    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB");
   }
 }
 
 const char controlPage[] PROGMEM = R"HTML(
 <!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font-family:system-ui;max-width:680px;margin:auto;padding:24px;background:#eef3f7}section{background:white;padding:20px;border-radius:16px;box-shadow:0 5px 20px #0001}button,textarea{font:inherit}button{padding:13px 18px;border:0;border-radius:10px;background:#08784f;color:white}textarea{box-sizing:border-box;width:100%;min-height:120px;padding:12px;margin:8px 0 12px}.warn{color:#805500}</style>
-<h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">La orden crea una vista previa. Google Sheets solo cambia despues de confirmar en Interfaz Portátil.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="send3c()">Enviar al asistente</button><button onclick="health()">Probar WSL</button><pre id="result"></pre></section>
+<h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">La orden se envía al backend y queda pendiente de confirmación en la web. Google Sheets cambia solo después de la confirmación web.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="send3c()">Enviar al asistente</button><button onclick="health()">Probar WSL</button><pre id="result"></pre></section>
 <script>async function send3c(){const b=new URLSearchParams({text:document.querySelector('#text').value});const r=await fetch('/api/3c',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b});result.textContent=r.status+' '+await r.text()}async function health(){const r=await fetch('/api/backend-health',{method:'POST'});result.textContent=r.status+' '+await r.text()}</script></html>
 )HTML";
 
