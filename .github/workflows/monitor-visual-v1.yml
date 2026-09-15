@@ -212,3 +212,5 @@ void playTone'''
           git rm .github/workflows/monitor-visual-v1.yml
           git commit -m "chore: remove temporary monitor UI validation"
           git push origin HEAD:${GITHUB_REF_NAME}
+
+# force push-triggered validation
