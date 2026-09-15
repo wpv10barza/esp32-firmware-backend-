@@ -1,0 +1,214 @@
+name: Monitor visual v1 validation
+
+on:
+  push:
+    branches:
+      - ui/monitor-visual-v1
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Render monitor UI only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("src/main.cpp")
+          text = path.read_text(encoding="utf-8")
+
+          prohibited = [
+              "preparedCommand",
+              "prepare3CCommand",
+              "cancelPreparedCommand",
+              "CONFIRMAR",
+              "CANCELAR",
+              "NUEVA ORDEN",
+          ]
+          for token in prohibited:
+              if token.lower() in text.lower():
+                  raise SystemExit(f"FAIL: prohibited symbol/text present: {token}")
+
+          for endpoint in (
+              "/api/device/v1/health",
+              "/api/device/v1/commands",
+              "/api/device/v1/commands/",
+          ):
+              if text.count(endpoint) == 0:
+                  raise SystemExit(f"FAIL: endpoint missing before UI change: {endpoint}")
+
+          poll = Path("include/app_config.h").read_text(encoding="utf-8")
+          if "commandPollMs = 2500UL" not in poll:
+              raise SystemExit("FAIL: polling interval is not 2500 ms")
+
+          pattern = re.compile(r"void drawPanel\(\) \{.*?\n\}\n\nvoid playTone", re.S)
+          replacement = r'''void drawPanel() {
+  if (!displayReady) return;
+
+  const uint16_t background = stateBackground(panelState);
+  const bool online = WiFi.status() == WL_CONNECTED && backendAvailable;
+  const uint16_t accent = panelState == PanelState::Offline
+    ? color565(145, 155, 165)
+    : color565(80, 190, 255);
+  const uint16_t onlineColor = online ? color565(70, 225, 140) : color565(225, 95, 95);
+
+  display->fillScreen(background);
+
+  display->setTextSize(2);
+  display->setTextColor(color565(170, 220, 255));
+  display->setCursor(18, 14);
+  display->print("Interfaz Portátil");
+
+  display->fillCircle(392, 23, 6, onlineColor);
+  display->setTextSize(1);
+  display->setTextColor(WHITE);
+  display->setCursor(402, 17);
+  display->print(online ? "ONLINE" : "OFFLINE");
+
+  display->drawFastHLine(18, 48, 444, color565(95, 120, 135));
+
+  display->setTextSize(1);
+  display->setTextColor(color565(165, 185, 198));
+  display->setCursor(20, 61);
+  display->print("BACKEND");
+
+  display->setTextSize(2);
+  display->setTextColor(online ? color565(100, 230, 155) : WHITE);
+  display->setCursor(20, 80);
+  display->print(backendAvailable ? "WSL DISPONIBLE" : "SIN CONEXION");
+
+  display->setTextSize(1);
+  display->setTextColor(color565(150, 195, 220));
+  display->setCursor(20, 112);
+  display->print("IP: ");
+  display->print(WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "--");
+
+  display->drawFastHLine(18, 132, 444, color565(95, 120, 135));
+
+  display->setTextSize(1);
+  display->setTextColor(color565(165, 185, 198));
+  display->setCursor(20, 145);
+  display->print("ÚLTIMA OPERACIÓN");
+
+  drawCentered(stateLabel(panelState), 165, 3, WHITE);
+
+  String detail = panelDetail;
+  if (detail.length() > 42) detail = detail.substring(0, 39) + "...";
+  drawCentered(detail, 205, 1, color565(220, 230, 238));
+
+  if (lastCommandId.length()) {
+    String commandId = lastCommandId;
+    if (commandId.length() > 28) commandId = commandId.substring(0, 25) + "...";
+    drawCentered(String("command_id: ") + commandId, 228, 1, color565(165, 190, 205));
+  }
+
+  display->drawFastHLine(18, 255, 444, color565(95, 120, 135));
+
+  display->setTextSize(1);
+  display->setTextColor(color565(165, 185, 198));
+  display->setCursor(20, 268);
+  display->print("RESULTADO");
+
+  const bool terminal = panelState == PanelState::Applied ||
+                        panelState == PanelState::Rejected ||
+                        panelState == PanelState::Error;
+  drawCentered(terminal ? stateLabel(panelState) : "PENDIENTE", 288, 2, accent);
+
+  String resultDetail = terminal
+    ? panelDetail
+    : "CONFIRMACIÓN REQUERIDA EN WEB";
+  if (resultDetail.length() > 43) resultDetail = resultDetail.substring(0, 40) + "...";
+  drawCentered(resultDetail, 316, 1, color565(220, 230, 238));
+
+  drawButton(20, 386, 210, 74, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(250, 386, 210, 74, "ENVIAR 3C", color565(18, 105, 73));
+}
+
+void playTone'''
+
+          if not pattern.search(text):
+              raise SystemExit("FAIL: drawPanel function boundary not found")
+          updated = pattern.sub(replacement, text, count=1)
+          if updated == text:
+              raise SystemExit("FAIL: drawPanel was not changed")
+          path.write_text(updated, encoding="utf-8")
+          PY
+
+      - name: Validate visual scope and API invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '== Prohibited symbols/text =='
+          if grep -RniE 'preparedCommand|prepare3CCommand|cancelPreparedCommand|CONFIRMAR|CANCELAR|NUEVA ORDEN' src site public 2>/dev/null; then
+            echo 'FAIL: prohibited symbols/text found'
+            exit 1
+          fi
+          echo 'PASS: prohibited symbols absent'
+
+          echo '== Expected visual strings =='
+          grep -Fq 'Interfaz Portátil' src/main.cpp
+          grep -Fq 'ONLINE' src/main.cpp
+          grep -Fq 'OFFLINE' src/main.cpp
+          grep -Fq 'BACKEND' src/main.cpp
+          grep -Fq 'WSL DISPONIBLE' src/main.cpp
+          grep -Fq 'SIN CONEXION' src/main.cpp
+          grep -Fq 'ULTIMA OPERACIÓN' src/main.cpp || grep -Fq 'ÚLTIMA OPERACIÓN' src/main.cpp
+          grep -Fq 'RESULTADO' src/main.cpp
+          grep -Fq 'CONFIRMACIÓN REQUERIDA EN WEB' src/main.cpp
+          grep -Fq 'PROBAR WSL' src/main.cpp
+          grep -Fq 'ENVIAR 3C' src/main.cpp
+          echo 'PASS: expected visual strings present'
+
+          echo '== Endpoint invariants =='
+          for endpoint in '/api/device/v1/health' '/api/device/v1/commands' '/api/device/v1/commands/'; do
+            git show origin/main:src/main.cpp | grep -F "$endpoint" > /tmp/base_endpoint.txt || true
+            grep -F "$endpoint" src/main.cpp > /tmp/current_endpoint.txt || true
+            test "$(cat /tmp/base_endpoint.txt)" = "$(cat /tmp/current_endpoint.txt)"
+          done
+          test "$(git show origin/main:include/app_config.h | grep 'commandPollMs =')" = "$(grep 'commandPollMs =' include/app_config.h)"
+          echo 'PASS: HTTP endpoints and 2.5 s polling unchanged'
+
+          echo '== Source diff scope =='
+          git diff --unified=0 -- src/main.cpp
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          current = Path("src/main.cpp").read_text(encoding="utf-8")
+          base = subprocess.check_output(["git", "show", "origin/main:src/main.cpp"], text=True)
+          def strip_draw(text):
+              import re
+              return re.sub(r"void drawPanel\(\) \{.*?\n\}\n\nvoid playTone", "DRAW_PANEL_REPLACED", text, count=1, flags=re.S)
+          if strip_draw(current) != strip_draw(base):
+              raise SystemExit("FAIL: source changes exist outside drawPanel")
+          print("PASS: src/main.cpp changes are drawPanel-only")
+          PY
+
+      - name: Compile panel_4848s040
+        run: |
+          python3 -m pip install platformio==6.1.18
+          pio run --environment panel_4848s040
+
+      - name: Commit and remove temporary validation workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/main.cpp
+          git commit -m "feat(ui): improve ESP32 visual monitor"
+          git rm .github/workflows/monitor-visual-v1.yml
+          git commit -m "chore: remove temporary monitor UI validation"
+          git push origin HEAD:${GITHUB_REF_NAME}
