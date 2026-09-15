@@ -1,0 +1,1 @@
+Temporary connectivity-contract validation is defined in test/backend-connectivity-contract.py and its workflow. This file is intentionally minimal.
