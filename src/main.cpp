@@ -30,6 +30,7 @@ constexpr uint16_t kTouchStatusRegister = 0x814E;
 constexpr uint16_t kTouchPointRegister = 0x814F;
 constexpr int kScreenWidth = 480;
 constexpr int kScreenHeight = 480;
+constexpr uint8_t kHttpAttempts = 2;
 
 WebServer web(80);
 Arduino_ESP32SPI* displayBus = nullptr;
@@ -462,19 +463,32 @@ bool checkBackendHealth() {
     return false;
   }
   updatePanel(PanelState::Busy, "Verificando endpoint WSL");
-  HTTPClient http;
-  http.setTimeout(app_config::httpTimeoutMs);
-  http.begin(endpoint("/api/device/v1/health"));
-  const int code = http.GET();
-  lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
-  http.end();
+  int code = -1;
+  lastBackendMessage = "Sin respuesta del backend";
+  const String url = endpoint("/api/device/v1/health");
+  for (uint8_t attempt = 1; attempt <= kHttpAttempts; ++attempt) {
+    WiFiClient client;
+    HTTPClient http;
+    http.setTimeout(app_config::httpTimeoutMs);
+    if (!http.begin(client, url)) {
+      Serial.printf("[ERROR] transport begin failed attempt=%u url=%s\n", attempt, url.c_str());
+      lastBackendMessage = "No se pudo abrir conexion HTTP";
+      continue;
+    }
+    code = http.GET();
+    lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
+    http.end();
+    if (code > 0) break;
+    Serial.printf("[ERROR] transport GET attempt=%u code=%d detail=%s\n", attempt, code, lastBackendMessage.c_str());
+    delay(150);
+  }
   backendAvailable = code == 200;
   Serial.printf("[BACKEND] GET /api/device/v1/health http=%d result=%s\n",
     code, backendAvailable ? "ok" : "error");
   if (code != 200) Serial.printf("[ERROR] backend health http=%d\n", code);
   updatePanel(
     backendAvailable ? PanelState::Ready : PanelState::Error,
-    backendAvailable ? "Endpoint 3C conectado" : String("HTTP ") + code,
+    backendAvailable ? "Endpoint 3C conectado" : (code > 0 ? String("HTTP ") + code : "TRANSPORTE SIN CONEXION"),
     true);
   Serial.printf("GET health -> %d %s\n", code, lastBackendMessage.c_str());
   return backendAvailable;
@@ -493,21 +507,34 @@ int send3CCommand(const String& rawCommand) {
   }
 
   updatePanel(PanelState::Busy, "Enviando vista previa", true);
-  HTTPClient http;
-  http.setTimeout(app_config::httpTimeoutMs);
-  http.begin(endpoint("/api/device/v1/commands"));
-  http.addHeader("Content-Type", "application/json");
-  addDeviceToken(http);
-
   char randomPart[9];
   snprintf(randomPart, sizeof(randomPart), "%08lx", static_cast<unsigned long>(esp_random()));
   const String requestId = String(app_config::deviceId) + "-" + randomPart + "-" + String(millis());
   const String body = "{\"device_id\":\"" + jsonEscape(app_config::deviceId) +
     "\",\"request_id\":\"" + jsonEscape(requestId) +
     "\",\"text\":\"" + jsonEscape(command) + "\"}";
-  const int code = http.POST(body);
-  lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
-  http.end();
+
+  int code = -1;
+  lastBackendMessage = "Sin respuesta del backend";
+  const String url = endpoint("/api/device/v1/commands");
+  for (uint8_t attempt = 1; attempt <= kHttpAttempts; ++attempt) {
+    WiFiClient client;
+    HTTPClient http;
+    http.setTimeout(app_config::httpTimeoutMs);
+    if (!http.begin(client, url)) {
+      Serial.printf("[ERROR] transport begin failed attempt=%u url=%s\n", attempt, url.c_str());
+      lastBackendMessage = "No se pudo abrir conexion HTTP";
+      continue;
+    }
+    http.addHeader("Content-Type", "application/json");
+    addDeviceToken(http);
+    code = http.POST(body);
+    lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
+    http.end();
+    if (code > 0) break;
+    Serial.printf("[ERROR] transport POST attempt=%u code=%d detail=%s\n", attempt, code, lastBackendMessage.c_str());
+    delay(150);
+  }
   Serial.printf("[COMMAND] POST /api/device/v1/commands http=%d\n", code);
 
   if (code == 200 || code == 202) {
@@ -534,13 +561,25 @@ int send3CCommand(const String& rawCommand) {
 
 void pollCommandStatus() {
   if (!lastCommandId.length() || WiFi.status() != WL_CONNECTED) return;
-  HTTPClient http;
-  http.setTimeout(app_config::httpTimeoutMs);
-  http.begin(endpoint("/api/device/v1/commands/" + lastCommandId));
-  addDeviceToken(http);
-  const int code = http.GET();
-  const String body = code > 0 ? http.getString() : http.errorToString(code);
-  http.end();
+  int code = -1;
+  String body;
+  const String url = endpoint("/api/device/v1/commands/" + lastCommandId);
+  for (uint8_t attempt = 1; attempt <= kHttpAttempts; ++attempt) {
+    WiFiClient client;
+    HTTPClient http;
+    http.setTimeout(app_config::httpTimeoutMs);
+    if (!http.begin(client, url)) {
+      Serial.printf("[ERROR] transport begin failed attempt=%u url=%s\n", attempt, url.c_str());
+      continue;
+    }
+    addDeviceToken(http);
+    code = http.GET();
+    body = code > 0 ? http.getString() : http.errorToString(code);
+    http.end();
+    if (code > 0) break;
+    Serial.printf("[ERROR] transport poll attempt=%u code=%d detail=%s\n", attempt, code, body.c_str());
+    delay(150);
+  }
   String shortCommandId = lastCommandId;
   if (shortCommandId.length() > 12) shortCommandId = shortCommandId.substring(0, 8) + "..." + shortCommandId.substring(shortCommandId.length() - 4);
   Serial.printf("[POLL] GET /api/device/v1/commands/%s http=%d\n",
