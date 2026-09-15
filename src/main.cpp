@@ -148,10 +148,10 @@ void drawPanel() {
   display->fillRect(0, 0, kScreenWidth, 58, panel);
   drawCentered("Interfaz Portátil", 16, 2, titleColor);
   display->drawFastHLine(0, 58, kScreenWidth, border);
-  display->fillCircle(419, 28, 6, online ? color565(60, 200, 150) : color565(185, 100, 90));
+  display->fillCircle(380, 28, 6, online ? color565(60, 200, 150) : color565(185, 100, 90));
   display->setTextSize(2);
   display->setTextColor(valueColor);
-  display->setCursor(430, 21);
+  display->setCursor(392, 21);
   display->print(online ? "ONLINE" : "OFFLINE");
 
   // Backend / device information
