@@ -131,41 +131,132 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
 
 void drawPanel() {
   if (!displayReady) return;
-  const uint16_t background = stateBackground(panelState);
-  const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
+
+  const uint16_t background = color565(8, 14, 22);
+  const uint16_t panel = color565(17, 26, 36);
+  const uint16_t panelAlt = color565(13, 21, 30);
+  const uint16_t border = color565(62, 82, 100);
+  const uint16_t titleColor = color565(170, 220, 255);
+  const uint16_t labelColor = color565(145, 170, 190);
+  const uint16_t valueColor = WHITE;
+  const uint16_t accent = panelState == PanelState::Offline ? color565(125, 135, 145) : color565(60, 200, 150);
+  const bool online = WiFi.status() == WL_CONNECTED && backendAvailable;
+
   display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
 
-  if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
-    display->drawLine(112, 105, 172, 165, eye);
-    display->drawLine(172, 105, 112, 165, eye);
-    display->drawLine(308, 105, 368, 165, eye);
-    display->drawLine(368, 105, 308, 165, eye);
-  } else if (panelState == PanelState::Applied) {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
-    display->drawLine(205, 205, 225, 218, eye);
-    display->drawLine(225, 218, 255, 218, eye);
-    display->drawLine(255, 218, 275, 205, eye);
-  } else {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
-  }
+  // Header
+  display->fillRect(0, 0, kScreenWidth, 58, panel);
+  drawCentered("Interfaz Portátil", 16, 2, titleColor);
+  display->drawFastHLine(0, 58, kScreenWidth, border);
+  display->fillCircle(419, 28, 6, online ? color565(60, 200, 150) : color565(185, 100, 90));
+  display->setTextSize(2);
+  display->setTextColor(valueColor);
+  display->setCursor(430, 21);
+  display->print(online ? "ONLINE" : "OFFLINE");
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
-  String detail = panelDetail;
-  if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
+  // Backend / device information
+  display->fillRoundRect(16, 72, 448, 104, 12, panelAlt);
+  display->drawRoundRect(16, 72, 448, 104, 12, border);
+  display->setTextSize(1);
+  display->setTextColor(labelColor);
+  display->setCursor(30, 86);
+  display->print("BACKEND");
+  display->setTextSize(2);
+  display->setTextColor(accent);
+  display->setCursor(30, 106);
+  display->print(backendAvailable ? "WSL DISPONIBLE" : "SIN CONEXION");
+
+  display->setTextSize(1);
+  display->setTextColor(labelColor);
+  display->setCursor(30, 134);
+  display->print("IP / DISPOSITIVO");
+  display->setTextColor(valueColor);
+  display->setCursor(30, 150);
   if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
+    display->print(WiFi.localIP().toString());
+  } else {
+    display->print("--");
+  }
+  display->setCursor(220, 150);
+  display->print(app_config::deviceId);
+
+  // Última operación
+  display->fillRoundRect(16, 190, 448, 106, 12, panel);
+  display->drawRoundRect(16, 190, 448, 106, 12, border);
+  display->setTextSize(1);
+  display->setTextColor(labelColor);
+  display->setCursor(30, 205);
+  display->print("ULTIMA OPERACION");
+  display->setTextSize(2);
+  display->setTextColor(valueColor);
+  display->setCursor(30, 224);
+  display->print(stateLabel(panelState));
+
+  String detail = panelDetail;
+  if (detail.length() > 58) detail = detail.substring(0, 55) + "...";
+  display->setTextSize(1);
+  display->setTextColor(color565(210, 225, 235));
+  display->setCursor(30, 250);
+  display->print(detail);
+
+  display->setTextColor(labelColor);
+  display->setCursor(30, 270);
+  display->print("command_id: ");
+  if (lastCommandId.length()) {
+    String shortId = lastCommandId;
+    if (shortId.length() > 12) shortId = shortId.substring(0, 8) + "..." + shortId.substring(shortId.length() - 4);
+    display->setTextColor(valueColor);
+    display->print(shortId);
+  } else {
+    display->setTextColor(valueColor);
+    display->print("--");
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  // Resultado del último comando / espera de polling
+  display->fillRoundRect(16, 310, 448, 54, 12, panelAlt);
+  display->drawRoundRect(16, 310, 448, 54, 12, border);
+  display->setTextSize(1);
+  display->setTextColor(labelColor);
+  display->setCursor(30, 324);
+  display->print("RESULTADO");
+  display->setTextSize(2);
+  display->setCursor(30, 342);
+  if (panelState == PanelState::Applied || panelState == PanelState::Rejected || panelState == PanelState::Error) {
+    display->setTextColor(valueColor);
+    display->print(stateLabel(panelState));
+  } else if (panelState == PanelState::Pending) {
+    display->setTextColor(color565(230, 190, 90));
+    display->print("PENDIENTE");
+  } else {
+    display->setTextColor(valueColor);
+    display->print(stateLabel(panelState));
+  }
+
+  display->setTextSize(1);
+  display->setTextColor(labelColor);
+  if (panelState == PanelState::Pending) {
+    display->setCursor(185, 348);
+    display->print("CONFIRMACIÓN REQUERIDA EN WEB");
+  } else if (panelState == PanelState::Busy && lastCommandId.length()) {
+    display->setCursor(185, 348);
+    display->print("ESPERANDO POLLING");
+  }
+
+  // Health result remains visible without changing the HTTP contract.
+  display->setTextColor(labelColor);
+  display->setCursor(30, 382);
+  display->print("HEALTH: ");
+  display->setTextColor(backendAvailable ? color565(80, 205, 155) : color565(190, 115, 105));
+  display->print(backendAvailable ? "OK" : "NO DISPONIBLE");
+  String healthDetail = lastBackendMessage;
+  if (healthDetail.length() > 42) healthDetail = healthDetail.substring(0, 39) + "...";
+  display->setTextColor(color565(170, 190, 205));
+  display->setCursor(112, 382);
+  display->print(healthDetail);
+
+  // Exactly two touch actions.
+  drawButton(16, 402, 214, 62, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(250, 402, 214, 62, "ENVIAR 3C", color565(18, 105, 73));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
