@@ -255,6 +255,7 @@ void drawPanel() {
   display->print(healthDetail);
 
   // Exactly two touch actions.
+  display->drawFastHLine(16, 394, 448, border);
   drawButton(16, 402, 214, 62, "PROBAR WSL", color565(15, 82, 135));
   drawButton(250, 402, 214, 62, "ENVIAR 3C", color565(18, 105, 73));
 }
