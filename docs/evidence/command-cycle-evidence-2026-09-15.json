@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "recorded_at": "2026-09-15T15:47:00-05:00",
+  "repository": "wpv10barza/esp32-firmware-backend-",
+  "branch": "ui/panel-human-confirmation",
+  "pull_request": 9,
+  "evidence_status": "NOT_YET_ESTABLISHED",
+  "separation": {
+    "backend_health": "API reachability only",
+    "esp32_application_state": "state derived from HTTP responses",
+    "physical_esp32_health": "requires real-panel serial/display/touch evidence",
+    "ci": "build/source validation only; not physical proof"
+  },
+  "device_id_expected": "panel-4848s040-3c-01",
+  "cycle": [
+    {"step": 0, "name": "run_prepared", "timestamp": "2026-09-15T15:47:00-05:00", "result": "RECORDED", "capture": "capture-00-environment.txt"},
+    {"step": 1, "name": "physical_boot", "timestamp": null, "result": "NOT_EXECUTED_IN_THIS_SESSION", "capture": ["capture-01-boot.txt", "capture-01-screen.jpg"]},
+    {"step": 2, "name": "backend_health", "timestamp": null, "http": {"method": "GET", "path": "/api/device/v1/health", "status": null}, "classification": "BACKEND_REACHABILITY", "capture": "capture-02-health.txt"},
+    {"step": 3, "name": "command_submission", "timestamp": null, "http": {"method": "POST", "path": "/api/device/v1/commands", "status": null}, "request_id": null, "command_id": null, "classification": "COMMAND_ACCEPTANCE", "capture": "capture-03-post.txt"},
+    {"step": 4, "name": "pending_state", "timestamp": null, "command_id": null, "display_state": "PENDIENTE", "detail": "CONFIRMACIÓN REQUERIDA EN WEB", "classification": "ESP32_APPLICATION_STATE", "capture": ["capture-04-pending.jpg", "capture-04-serial.txt"]},
+    {"step": 5, "name": "web_backend_decision", "timestamp": null, "command_id": null, "decision": null, "classification": "BACKEND_WORKFLOW", "capture": "capture-05-web-decision.jpg"},
+    {"step": 6, "name": "command_poll", "timestamp": null, "http": {"method": "GET", "path": "/api/device/v1/commands/{command_id}", "status": null}, "command_id": null, "terminal_status": null, "result": null, "classification": "COMMAND_LIFECYCLE", "capture": "capture-06-poll.txt"},
+    {"step": 7, "name": "terminal_display", "timestamp": null, "command_id": null, "display_state": null, "allowed_states": ["APLICADO", "RECHAZADO", "ERROR"], "classification": "PHYSICAL_UI_EVIDENCE", "capture": ["capture-07-final.jpg", "capture-07-serial.txt"]},
+    {"step": 8, "name": "trace_closed", "timestamp": null, "command_id": null, "same_command_id_from_post_to_poll": null, "classification": "END_TO_END", "capture": "capture-08-trace.txt"}
+  ],
+  "acceptance": {
+    "same_command_id_post_and_poll": true,
+    "real_timestamps_for_steps_1_to_8": true,
+    "http_transcripts_present": true,
+    "physical_screen_capture_present": true,
+    "final_ui_matches_terminal_backend_status": true
+  }
+}
