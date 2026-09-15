@@ -676,4 +676,6 @@ void loop() {
   delay(5);
 }
 
+// Block 3 telemetry checkpoint. No functional behavior.
+
 #endif  // BOARD_PANEL_4848S040
