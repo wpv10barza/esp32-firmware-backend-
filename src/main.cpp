@@ -483,14 +483,36 @@ void configureWebServer() {
   web.begin();
 }
 
+const char* wifiStatusLabel(wl_status_t status) {
+  switch (status) {
+    case WL_NO_SHIELD: return "NO_SHIELD";
+    case WL_IDLE_STATUS: return "IDLE";
+    case WL_NO_SSID_AVAIL: return "NO_SSID_AVAIL";
+    case WL_SCAN_COMPLETED: return "SCAN_COMPLETED";
+    case WL_CONNECTED: return "CONNECTED";
+    case WL_CONNECT_FAILED: return "CONNECT_FAILED";
+    case WL_CONNECTION_LOST: return "CONNECTION_LOST";
+    case WL_DISCONNECTED: return "DISCONNECTED";
+    default: return "UNKNOWN";
+  }
+}
+
+void configureWifi() {
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+  WiFi.mode(WIFI_STA);
+  WiFi.setHostname(app_config::deviceId);
+}
+
 void connectWifi() {
   if (!strlen(app_config::wifiSsid)) {
     updatePanel(PanelState::Offline, "Configure local_config.h");
     Serial.println("Configure include/local_config.h antes de usar Wi-Fi.");
     return;
   }
-  WiFi.mode(WIFI_STA);
-  WiFi.setHostname(app_config::deviceId);
+  configureWifi();
+  Serial.printf("Wi-Fi: iniciando STA, credenciales presentes, status=%d (%s)\n",
+    static_cast<int>(WiFi.status()), wifiStatusLabel(WiFi.status()));
   WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
   lastWifiAttempt = millis();
   updatePanel(PanelState::Busy, "Conectando Wi-Fi");
@@ -530,7 +552,8 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiAnnounced) {
       wifiAnnounced = true;
-      Serial.printf("Wi-Fi listo: http://%s/\n", WiFi.localIP().toString().c_str());
+      Serial.printf("Wi-Fi listo: http://%s/ gateway=%s rssi=%d\n",
+        WiFi.localIP().toString().c_str(), WiFi.gatewayIP().toString().c_str(), WiFi.RSSI());
       if (!mdnsReady) {
         mdnsReady = MDNS.begin("esp32-panel-3c");
         if (mdnsReady) MDNS.addService("http", "tcp", 80);
@@ -549,8 +572,10 @@ void loop() {
     wifiAnnounced = false;
     if (strlen(app_config::wifiSsid) && millis() - lastWifiAttempt >= app_config::wifiRetryMs) {
       lastWifiAttempt = millis();
-      WiFi.disconnect();
-      WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
+      const wl_status_t status = WiFi.status();
+      Serial.printf("Wi-Fi no conectado: status=%d (%s); reintentando con WiFi.reconnect()\n",
+        static_cast<int>(status), wifiStatusLabel(status));
+      WiFi.reconnect();
       updatePanel(PanelState::Busy, "Reconectando Wi-Fi");
     }
   }
