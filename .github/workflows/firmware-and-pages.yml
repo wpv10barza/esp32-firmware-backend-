@@ -7,191 +7,56 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: firmware-site-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  visual_validation:
-    if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]'
+  firmware:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-
-      - name: Apply visual monitor layout and validate invariants
-        shell: bash
+          python-version: "3.12"
+      - name: Reject local secrets
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          import subprocess
-
-          path = Path("src/main.cpp")
-          text = path.read_text(encoding="utf-8")
-
-          prohibited = [
-              "preparedCommand",
-              "prepare3CCommand",
-              "cancelPreparedCommand",
-              "CONFIRMAR",
-              "CANCELAR",
-              "NUEVA ORDEN",
-          ]
-          for token in prohibited:
-              if token.lower() in text.lower():
-                  raise SystemExit(f"FAIL: prohibited symbol/text present: {token}")
-
-          for endpoint in (
-              "/api/device/v1/health",
-              "/api/device/v1/commands",
-              "/api/device/v1/commands/",
-          ):
-              if text.count(endpoint) == 0:
-                  raise SystemExit(f"FAIL: endpoint missing: {endpoint}")
-
-          config = Path("include/app_config.h").read_text(encoding="utf-8")
-          if "commandPollMs = 2500UL" not in config:
-              raise SystemExit("FAIL: polling interval is not 2500 ms")
-
-          pattern = re.compile(r"void drawPanel\(\) \{.*?\n\}\n\nvoid playTone", re.S)
-          replacement = r'''void drawPanel() {
-  if (!displayReady) return;
-
-  const uint16_t background = stateBackground(panelState);
-  const bool online = WiFi.status() == WL_CONNECTED && backendAvailable;
-  const uint16_t accent = panelState == PanelState::Offline
-    ? color565(145, 155, 165)
-    : color565(80, 190, 255);
-  const uint16_t onlineColor = online
-    ? color565(70, 225, 140)
-    : color565(225, 95, 95);
-
-  display->fillScreen(background);
-
-  display->setTextSize(2);
-  display->setTextColor(color565(170, 220, 255));
-  display->setCursor(18, 14);
-  display->print("Interfaz Portátil");
-
-  display->fillCircle(392, 23, 6, onlineColor);
-  display->setTextSize(1);
-  display->setTextColor(WHITE);
-  display->setCursor(402, 17);
-  display->print(online ? "ONLINE" : "OFFLINE");
-
-  display->drawFastHLine(18, 48, 444, color565(95, 120, 135));
-
-  display->setTextSize(1);
-  display->setTextColor(color565(165, 185, 198));
-  display->setCursor(20, 61);
-  display->print("BACKEND");
-
-  display->setTextSize(2);
-  display->setTextColor(online ? color565(100, 230, 155) : WHITE);
-  display->setCursor(20, 80);
-  display->print(backendAvailable ? "WSL DISPONIBLE" : "SIN CONEXION");
-
-  display->setTextSize(1);
-  display->setTextColor(color565(150, 195, 220));
-  display->setCursor(20, 112);
-  display->print("IP: ");
-  display->print(WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "--");
-
-  display->drawFastHLine(18, 132, 444, color565(95, 120, 135));
-
-  display->setTextSize(1);
-  display->setTextColor(color565(165, 185, 198));
-  display->setCursor(20, 145);
-  display->print("ÚLTIMA OPERACIÓN");
-
-  drawCentered(stateLabel(panelState), 165, 3, WHITE);
-
-  String detail = panelDetail;
-  if (detail.length() > 42) detail = detail.substring(0, 39) + "...";
-  drawCentered(detail, 205, 1, color565(220, 230, 238));
-
-  if (lastCommandId.length()) {
-    String commandId = lastCommandId;
-    if (commandId.length() > 28) commandId = commandId.substring(0, 25) + "...";
-    drawCentered(String("command_id: ") + commandId, 228, 1, color565(165, 190, 205));
-  }
-
-  display->drawFastHLine(18, 255, 444, color565(95, 120, 135));
-
-  display->setTextSize(1);
-  display->setTextColor(color565(165, 185, 198));
-  display->setCursor(20, 268);
-  display->print("RESULTADO");
-
-  const bool terminal = panelState == PanelState::Applied ||
-                        panelState == PanelState::Rejected ||
-                        panelState == PanelState::Error;
-  drawCentered(terminal ? stateLabel(panelState) : "PENDIENTE", 288, 2, accent);
-
-  String resultDetail = terminal
-    ? panelDetail
-    : "CONFIRMACIÓN REQUERIDA EN WEB";
-  if (resultDetail.length() > 43) resultDetail = resultDetail.substring(0, 40) + "...";
-  drawCentered(resultDetail, 316, 1, color565(220, 230, 238));
-
-  drawButton(20, 386, 210, 74, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 386, 210, 74, "ENVIAR 3C", color565(18, 105, 73));
-}
-
-void playTone'''
-
-          if not pattern.search(text):
-              raise SystemExit("FAIL: drawPanel boundary not found")
-          updated = pattern.sub(replacement, text, count=1)
-          path.write_text(updated, encoding="utf-8")
-
-          current = path.read_text(encoding="utf-8")
-          if any(token.lower() in current.lower() for token in prohibited):
-              raise SystemExit("FAIL: prohibited symbols/text remain")
-          for expected in (
-              "Interfaz Portátil", "ONLINE", "OFFLINE", "BACKEND",
-              "WSL DISPONIBLE", "SIN CONEXION", "ÚLTIMA OPERACIÓN",
-              "RESULTADO", "CONFIRMACIÓN REQUERIDA EN WEB",
-              "PROBAR WSL", "ENVIAR 3C", "command_id:"
-          ):
-              if expected not in current:
-                  raise SystemExit(f"FAIL: expected visual string missing: {expected}")
-
-          base = subprocess.check_output(["git", "show", "origin/main:src/main.cpp"], text=True)
-          base_config = subprocess.check_output(["git", "show", "origin/main:include/app_config.h"], text=True)
-          def strip_draw(value):
-              return re.sub(r"void drawPanel\(\) \{.*?\n\}\n\nvoid playTone", "DRAW_PANEL_REPLACED", value, count=1, flags=re.S)
-          if strip_draw(current) != strip_draw(base):
-              raise SystemExit("FAIL: source changed outside drawPanel")
-          for route in ("/api/device/v1/health", "/api/device/v1/commands", "/api/device/v1/commands/"):
-              if [line for line in base.splitlines() if route in line] != [line for line in current.splitlines() if route in line]:
-                  raise SystemExit(f"FAIL: endpoint text changed: {route}")
-          if "commandPollMs = 2500UL" in base_config and "commandPollMs = 2500UL" not in Path("include/app_config.h").read_text(encoding="utf-8"):
-              raise SystemExit("FAIL: polling interval changed")
-          print("PASS: symbols, strings, endpoints, polling, and drawPanel-only scope")
-          PY
-
-      - name: Compile panel_4848s040
+          test ! -f include/local_config.h
+          ! git ls-files | grep -Ei 'credentials|service-account|\.env$'
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.18
+      - name: Compile ESP32-S3-4848S040
+        run: pio run --environment panel_4848s040
+      - name: Package reproducible binaries
         run: |
-          python3 -m pip install platformio==6.1.18
-          pio run --environment panel_4848s040
+          mkdir -p dist
+          cp .pio/build/panel_4848s040/firmware.bin dist/
+          cp .pio/build/panel_4848s040/bootloader.bin dist/
+          cp .pio/build/panel_4848s040/partitions.bin dist/
+          cp .pio/build/panel_4848s040/firmware.elf dist/
+          printf '%s\n' '0x0000 bootloader.bin' '0x8000 partitions.bin' '0x10000 firmware.bin' > dist/flash-layout.txt
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          printf '{"source_sha":"%s","environment":"panel_4848s040","validation":"compiled_not_physically_flashed"}\n' "${GITHUB_SHA}" > dist/manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esp32-s3-4848s040-firmware
+          path: dist/
+          if-no-files-found: error
 
-      - name: Commit final UI-only source and restore CI
-        shell: bash
+  site:
+    needs: firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify static site
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git show origin/main:.github/workflows/firmware-and-pages.yml > .github/workflows/firmware-and-pages.yml
-          git add src/main.cpp .github/workflows/firmware-and-pages.yml
-          git commit -m "feat(ui): improve ESP32 visual monitor"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          test -s site/index.html
+          grep -q 'ESP32-S3-4848S040' site/index.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: github-pages-site
+          path: site/
+          if-no-files-found: error
