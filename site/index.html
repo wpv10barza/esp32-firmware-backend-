@@ -19,15 +19,15 @@ ol{padding-left:22px}footer{color:var(--muted);margin-top:28px}
 <p>Firmware del panel cuadrado 480×480 conectado al backend consolidado de Ubuntu/WSL.</p></header>
 <section class="grid">
 <div class="card"><h2>Hardware objetivo</h2><div class="value">ESP32-S3 N16R8</div><p>LCD ST7701, táctil GT911, flash QIO 16 MB y PSRAM OPI 8 MB.</p></div>
-<div class="card"><h2>Contrato backend</h2><div class="value">Vista previa + confirmación</div><p>El dispositivo solicita órdenes; nunca escribe directamente en Google Sheets.</p></div>
-<div class="card"><h2>Evidencia CI</h2><div class="value">PlatformIO 6.1.18</div><p><a href="https://github.com/wpv10barza/esp32-firmware-backend-/actions">Ver compilaciones y descargar binarios</a>.</p></div>
+<div class="card"><h2>Contrato backend</h2><div class="value">GET /api/device/v1/health</div><p>El firmware exige HTTP 200 para declarar disponible el backend y conserva la confirmación humana para las órdenes.</p></div>
+<div class="card"><h2>CI remoto</h2><div class="value">Contrato + compilación</div><p><a href="https://github.com/wpv10barza/esp32-firmware-backend-/actions">Ver workflows, checks y artefactos</a>. El smoke HTTP del backend se ejecuta solo cuando <code>BACKEND_HEALTH_URL</code> está configurado.</p></div>
 </section>
-<section class="card"><h2>Despliegue físico</h2><ol>
-<li>Clonar el repositorio en Ubuntu/WSL.</li>
-<li>Crear <code>include/local_config.h</code> sin publicarlo.</li>
-<li>Compilar con <code>pio run -e panel_4848s040</code>.</li>
-<li>Cargar por USB con <code>pio run -e panel_4848s040 -t upload</code>.</li>
-<li>Verificar por serial a 115200 baudios y probar el endpoint real.</li>
-</ol><p class="warning">Este sitio acredita publicación y compilación. No sustituye una prueba física del panel, pantalla, táctil o Wi-Fi.</p></section>
+<section class="card"><h2>Evidencia física E2E</h2><ol>
+<li>El workflow manual <code>physical-e2e-panel</code> requiere <code>run_physical_e2e=true</code>.</li>
+<li>GitHub debe tener un runner <code>self-hosted</code> con la etiqueta <code>panel-4848s040</code>.</li>
+<li>El runner debe disponer de <code>include/local_config.h</code> sin versionarlo.</li>
+<li>La prueba carga por USB y exige evidencia serial de arranque, inicialización ST7701, Wi-Fi y <code>GET health -&gt; 200</code>.</li>
+<li>Finalmente consulta <code>/health</code> del propio ESP32 y exige <code>ok=true</code>, <code>wifi=true</code> y <code>backend=true</code>.</li>
+</ol><p class="warning">CI hospedado no puede tocar el panel físico. El estado de “Physical E2E PASS” solo puede originarse en el runner self-hosted con el dispositivo conectado. La legibilidad óptica y la interacción táctil requieren evidencia directa adicional.</p></section>
 <footer>Fuente derivada y fijada desde wpv10barza/esp32-3C@2ebac821 para trazabilidad de tesis.</footer>
 </main></body></html>
