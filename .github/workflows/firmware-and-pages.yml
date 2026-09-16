@@ -1,10 +1,16 @@
-name: Firmware and site artifact
+name: Firmware, backend health and physical E2E evidence
 
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_physical_e2e:
+        description: "Run physical ESP32 E2E on a self-hosted panel runner"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,6 +36,8 @@ jobs:
         run: python tests/test_wifi_source.py
       - name: Test panel E2E state contract
         run: python tests/test_panel_state_contract.py
+      - name: Test health and CI evidence contract
+        run: python tests/test_health_ci_contract.py
       - name: Install PlatformIO
         run: pip install platformio==6.2.0
       - name: Verify PlatformIO Core
@@ -52,8 +60,20 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  backend-health-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BACKEND_HEALTH_URL: ${{ secrets.BACKEND_HEALTH_URL }}
+      BACKEND_HEALTH_TOKEN: ${{ secrets.BACKEND_HEALTH_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe documented backend health endpoint
+        run: python scripts/backend-health-smoke.py
+
   site:
-    needs: firmware
+    needs: [firmware, backend-health-smoke]
+    if: ${{ always() && needs.firmware.result == 'success' && needs.backend-health-smoke.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,8 +81,44 @@ jobs:
         run: |
           test -s site/index.html
           grep -q 'ESP32-S3-4848S040' site/index.html
+          grep -q 'runner self-hosted' site/index.html
       - uses: actions/upload-artifact@v4
         with:
           name: github-pages-site
           path: site/
           if-no-files-found: error
+
+  physical-e2e-panel:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_physical_e2e }}
+    runs-on: [self-hosted, linux, panel-4848s040]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require runner-side hardware configuration
+        run: |
+          test -f include/local_config.h
+          command -v pio
+          command -v curl
+      - name: Run USB/device/backend E2E
+        run: |
+          chmod +x scripts/physical-e2e.sh
+          scripts/physical-e2e.sh "${ESP32_SERIAL_PORT:-}" /tmp/esp32-panel-e2e.log
+      - name: Upload physical E2E serial evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-physical-e2e-${{ github.run_id }}
+          path: |
+            esp32-physical-e2e.log
+          if-no-files-found: warn
+      - name: Publish physical evidence summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo '## Physical ESP32 E2E evidence'
+            echo
+            echo '- Runner: self-hosted / panel-4848s040'
+            echo '- Required: real USB-connected ESP32-S3-4848S040'
+            echo '- Checked: flash, boot, ST7701 init, Wi-Fi, backend health, device `/health`'
+            echo '- Not covered: optical legibility and touch-zone interaction'
+          } >> "$GITHUB_STEP_SUMMARY"
