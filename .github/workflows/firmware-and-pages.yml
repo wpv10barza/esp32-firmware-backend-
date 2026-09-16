@@ -73,7 +73,7 @@ jobs:
 
   site:
     needs: [firmware, backend-health-smoke]
-    if: ${{ always() && needs.firmware.result == 'success' && (needs.backend-health-smoke.result == 'success' || needs.backend-health-smoke.result == 'skipped') }}
+    if: ${{ always() && needs.firmware.result == 'success' && needs.backend-health-smoke.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -111,3 +111,14 @@ jobs:
           path: |
             esp32-physical-e2e.log
           if-no-files-found: warn
+      - name: Publish physical evidence summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo '## Physical ESP32 E2E evidence'
+            echo
+            echo '- Runner: self-hosted / panel-4848s040'
+            echo '- Required: real USB-connected ESP32-S3-4848S040'
+            echo '- Checked: flash, boot, ST7701 init, Wi-Fi, backend health, device `/health`'
+            echo '- Not covered: optical legibility and touch-zone interaction'
+          } >> "$GITHUB_STEP_SUMMARY"
