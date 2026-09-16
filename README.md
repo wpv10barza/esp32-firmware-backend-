@@ -11,7 +11,15 @@ Firmware reproducible para el panel cuadrado **ESP32-S3-4848S040 (480×480)** co
 - publica binarios y manifiesto SHA-256 desde GitHub Actions;
 - despliega un sitio de estado documental mediante GitHub Pages.
 
-GitHub Actions demuestra **compilación**, no carga ni validación física. La prueba física requiere el panel conectado por USB.
+### Evidencia y alcance de GitHub Actions
+
+GitHub Actions separa tres niveles de evidencia:
+
+1. **CI remoto**: prueba contratos del firmware, compila el ESP32 y genera un manifiesto que marca el binario como `compiled_not_physically_flashed`.
+2. **Smoke test HTTP del backend**: el job `backend-health-smoke` consulta el endpoint configurado en el secreto `BACKEND_HEALTH_URL` y exige HTTP 200 con JSON `ok=true`. Si el secreto no está configurado, el job deja explícitamente `SKIPPED`; no inventa una conexión al backend de WSL.
+3. **Validación física E2E**: el job manual `physical-e2e-panel` solo se ejecuta con `run_physical_e2e=true` y sobre un runner **self-hosted** etiquetado `panel-4848s040`. Requiere el panel real conectado por USB y `include/local_config.h` existente en ese runner.
+
+La validación física E2E confirma carga USB, arranque, inicialización ST7701, Wi-Fi, `GET /api/device/v1/health -> 200` y el endpoint local `/health` del propio ESP32. No afirma por sí sola una prueba óptica o táctil; esas requieren evidencia directa adicional.
 
 ## Uso directo en Ubuntu/WSL
 
@@ -51,7 +59,7 @@ pio device list
 ls -l /dev/ttyACM* /dev/ttyUSB*
 ```
 
-El `BUSID` es el identificador mostrado por `usbipd list`. Si el dispositivo aparece en Windows pero no en WSL, no fuerce `/dev/ttyUSB0`: el ESP32-S3 puede exponerse como otro puerto serie, por ejemplo `/dev/ttyACM0`. `pio device list` es la referencia para seleccionar el puerto real. citeturn429716search3turn429716search0
+El `BUSID` es el identificador mostrado por `usbipd list`. Si el dispositivo aparece en Windows pero no en WSL, no fuerce `/dev/ttyUSB0`: el ESP32-S3 puede exponerse como otro puerto serie, por ejemplo `/dev/ttyACM0`. `pio device list` es la referencia para seleccionar el puerto real.
 
 En `local_config.h`, use la **IPv4 LAN de Windows** para el backend. Un ESP32 físico no puede acceder a `127.0.0.1` de WSL.
 
