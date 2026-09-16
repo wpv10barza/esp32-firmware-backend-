@@ -196,10 +196,33 @@ void updatePanel(PanelState state, const String& detail, bool sound = false) {
   panelState = state;
   panelDetail = detail;
   drawPanel();
+  Serial.printf("PANEL STATE -> %s | %s\n", stateLabel(panelState), panelDetail.c_str());
   if (!sound || !changed) return;
   if (state == PanelState::Applied || state == PanelState::Ready) playTone(880, 70);
   else if (state == PanelState::Pending || state == PanelState::Busy) playTone(620, 55);
   else if (state == PanelState::Rejected || state == PanelState::Error) playTone(220, 110);
+}
+
+String normalizedStatus(String status) {
+  status.trim();
+  status.toLowerCase();
+  return status;
+}
+
+void setTransportError(const char* phase, int code, const String& detail, bool clearCommand) {
+  backendAvailable = false;
+  if (clearCommand) lastCommandId = "";
+  const String message = String(phase) + " HTTP " + code;
+  updatePanel(PanelState::Error, message, true);
+  Serial.printf("[ERROR] transport phase=%s code=%d detail=%s\n", phase, code, detail.c_str());
+}
+
+void setProtocolError(const char* phase, const String& detail) {
+  backendAvailable = false;
+  lastCommandId = "";
+  const String message = String(phase) + ": " + (detail.length() ? detail : "respuesta invalida");
+  updatePanel(PanelState::Error, message, true);
+  Serial.printf("[ERROR] protocol phase=%s detail=%s\n", phase, detail.c_str());
 }
 
 bool initializeAudio() {
@@ -365,7 +388,7 @@ void addDeviceToken(HTTPClient& http) {
 bool checkBackendHealth() {
   if (WiFi.status() != WL_CONNECTED) {
     backendAvailable = false;
-    updatePanel(PanelState::Offline, "Wi-Fi desconectado");
+    updatePanel(PanelState::Offline, "Wi-Fi desconectado", true);
     return false;
   }
   updatePanel(PanelState::Busy, "Verificando endpoint WSL");
@@ -378,8 +401,11 @@ bool checkBackendHealth() {
   backendAvailable = code == 200;
   updatePanel(
     backendAvailable ? PanelState::Ready : PanelState::Error,
-    backendAvailable ? "Endpoint 3C conectado" : String("HTTP ") + code,
+    backendAvailable ? "Endpoint 3C conectado" : String("Health HTTP ") + code,
     true);
+  if (!backendAvailable) {
+    Serial.printf("[ERROR] health HTTP=%d detail=%s\n", code, lastBackendMessage.c_str());
+  }
   Serial.printf("GET health -> %d %s\n", code, lastBackendMessage.c_str());
   return backendAvailable;
 }
@@ -416,11 +442,15 @@ int send3CCommand(const String& rawCommand) {
   if (code == 200 || code == 202) {
     backendAvailable = true;
     lastCommandId = jsonStringValue(lastBackendMessage, "command_id");
+    if (!lastCommandId.length()) {
+      setProtocolError("POST", "falta command_id");
+      Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
+      return code;
+    }
     lastCommandPoll = millis();
     updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);
   } else {
-    backendAvailable = false;
-    updatePanel(PanelState::Error, String("Envio HTTP ") + code, true);
+    setTransportError("POST", code, lastBackendMessage, true);
   }
   Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
   return code;
@@ -434,13 +464,17 @@ void pollCommandStatus() {
   addDeviceToken(http);
   const int code = http.GET();
   const String body = code > 0 ? http.getString() : http.errorToString(code);
+  lastBackendMessage = body;
   http.end();
   if (code != 200) {
-    Serial.printf("GET command status -> %d %s\n", code, body.c_str());
+    setTransportError("POLL", code, body, true);
     return;
   }
-  const String status = jsonStringValue(body, "status");
+
+  String status = normalizedStatus(jsonStringValue(body, "status"));
   const String result = jsonStringValue(body, "result");
+  Serial.printf("GET command status -> %d status=%s result=%s\n", code, status.c_str(), result.c_str());
+
   if (status == "applied") {
     updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en WSL", true);
     lastCommandId = "";
@@ -448,10 +482,12 @@ void pollCommandStatus() {
     updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en WSL", true);
     lastCommandId = "";
   } else if (status == "error" || status == "failed" || status == "fallido") {
-    updatePanel(PanelState::Error, result.length() ? result : "Error reportado por WSL", true);
-    lastCommandId = "";
+    setProtocolError("POLL", result.length() ? result : "Error reportado por WSL");
   } else if (status == "pending_confirmation" || status == "pending" || status == "pendiente") {
+    backendAvailable = true;
     updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB");
+  } else {
+    setProtocolError("POLL", status.length() ? String("estado desconocido '") + status + "'" : "falta status");
   }
 }
 
