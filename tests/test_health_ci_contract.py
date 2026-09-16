@@ -40,7 +40,7 @@ for needle, label in [
     ("CI remoto", "README remote CI section"),
     ("contrato", "README contract evidence"),
     ("compila firmware", "README compilation evidence"),
-    ("smoke test HTTP del backend", "README backend smoke evidence"),
+    ("smoke test HTTP", "README backend smoke evidence"),
     ("validación física E2E", "README physical E2E section"),
     ("runner self-hosted", "README self-hosted scope"),
     ("conectado por USB", "README USB requirement"),
