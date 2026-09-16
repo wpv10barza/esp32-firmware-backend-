@@ -35,9 +35,18 @@ require(PHYSICAL, "curl", "device-local HTTP health evidence")
 require(PHYSICAL, "wifi=true", "ESP32 health Wi-Fi evidence")
 require(PHYSICAL, "backend=true", "ESP32 health backend evidence")
 
-# Documentation must distinguish remote CI evidence from the physical test.
-require(README, "CI demuestra contrato, compilación y, cuando se configura, un smoke test HTTP del backend.", "README CI scope")
-require(README, "La validación física E2E confirma carga USB, arranque, inicialización ST7701, Wi-Fi, `GET /api/device/v1/health -> 200` y el endpoint local `/health` del propio ESP32.", "README physical scope")
+# Documentation must distinguish remote CI evidence from physical hardware evidence.
+for needle, label in [
+    ("CI remoto", "README remote CI section"),
+    ("contrato", "README contract evidence"),
+    ("compila firmware", "README compilation evidence"),
+    ("smoke test HTTP del backend", "README backend smoke evidence"),
+    ("validación física E2E", "README physical E2E section"),
+    ("runner self-hosted", "README self-hosted scope"),
+    ("conectado por USB", "README USB requirement"),
+]:
+    require(README, needle, label)
+
 require(SITE, "CI remoto", "site remote CI label")
 require(SITE, "runner self-hosted", "site physical runner scope")
 
