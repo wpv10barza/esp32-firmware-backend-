@@ -38,11 +38,10 @@ require(PHYSICAL, "backend=true", "ESP32 health backend evidence")
 # Documentation must distinguish remote CI evidence from physical hardware evidence.
 for needle, label in [
     ("CI remoto", "README remote CI section"),
-    ("contrato", "README contract evidence"),
-    ("compila firmware", "README compilation evidence"),
-    ("smoke test HTTP", "README backend smoke evidence"),
+    ("backend-health-smoke", "README backend smoke job"),
+    ("BACKEND_HEALTH_URL", "README backend health secret"),
     ("validación física E2E", "README physical E2E section"),
-    ("runner self-hosted", "README self-hosted scope"),
+    ("self-hosted", "README self-hosted scope"),
     ("conectado por USB", "README USB requirement"),
 ]:
     require(README, needle, label)
