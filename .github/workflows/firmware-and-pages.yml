@@ -42,8 +42,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .ci/bin
-          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/command_buffer_regression.cpp -o .ci/bin/command_buffer_regression
-          .ci/bin/command_buffer_regression
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude tests/test_command_buffer_native.cpp -o .ci/bin/command_buffer_native
+          .ci/bin/command_buffer_native
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/command_text_viewport_test.cpp -o .ci/bin/command_text_viewport_test
           .ci/bin/command_text_viewport_test
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/virtual_keyboard_hit_test.cpp -o .ci/bin/virtual_keyboard_hit_test
