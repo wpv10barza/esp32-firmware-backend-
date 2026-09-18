@@ -96,7 +96,7 @@ jobs:
         run: python tests/test_device_api_e2e.py
 
       - name: Install browser E2E runner
-        working-directory: .ci
+        working-directory: e2e
         run: |
           npm init -y
           npm install --no-save @playwright/test@1.55.0
@@ -106,7 +106,7 @@ jobs:
         env:
           MONITOR_BASE_URL: http://127.0.0.1:3000
           ESP32_API_TOKEN: ci-e2e-token
-        run: .ci/node_modules/.bin/playwright test e2e/monitor_ui.spec.mjs --reporter=line
+        run: e2e/node_modules/.bin/playwright test e2e/monitor_ui.spec.mjs --reporter=line
 
       - name: Dump Monitor log on failure
         if: failure()
