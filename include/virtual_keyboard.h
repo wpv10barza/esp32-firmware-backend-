@@ -30,10 +30,14 @@ static_assert(kKeyboardY + kKeyboardHeight <= kScreenHeight,
 // Coordinates use half-open rectangles: [left, right) x [top, bottom).
 // This gives every pixel to exactly one key at a shared boundary.
 struct KeyRect {
-  int16_t left = 0;
-  int16_t top = 0;
-  int16_t right = 0;
-  int16_t bottom = 0;
+  int16_t left;
+  int16_t top;
+  int16_t right;
+  int16_t bottom;
+
+  constexpr KeyRect() : left(0), top(0), right(0), bottom(0) {}
+  constexpr KeyRect(int16_t leftValue, int16_t topValue, int16_t rightValue, int16_t bottomValue)
+      : left(leftValue), top(topValue), right(rightValue), bottom(bottomValue) {}
 
   constexpr bool contains(int x, int y) const {
     return x >= left && x < right && y >= top && y < bottom;
