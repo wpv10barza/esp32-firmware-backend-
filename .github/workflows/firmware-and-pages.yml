@@ -99,7 +99,7 @@ jobs:
         working-directory: .ci
         run: |
           npm init -y
-          npm install --no-save playwright@1.55.0
+          npm install --no-save @playwright/test@1.55.0
           npx playwright install --with-deps chromium
 
       - name: Run real Monitor UI E2E
