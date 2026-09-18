@@ -88,15 +88,14 @@ constexpr int rowOrigin(uint8_t row) {
 }
 
 constexpr KeyRect makeRect(const KeyDefinition& definition, uint8_t row) {
-  const int left = columnOrigin(definition.startColumn);
-  const int width = static_cast<int>(definition.spanColumns) * kKeyWidth +
-                    static_cast<int>(definition.spanColumns - 1) * kColumnGap;
-  return KeyRect{
-      static_cast<int16_t>(left),
+  return KeyRect(
+      static_cast<int16_t>(columnOrigin(definition.startColumn)),
       static_cast<int16_t>(rowOrigin(row)),
-      static_cast<int16_t>(left + width),
-      static_cast<int16_t>(rowOrigin(row) + kKeyHeight),
-  };
+      static_cast<int16_t>(
+          columnOrigin(definition.startColumn) +
+          static_cast<int>(definition.spanColumns) * kKeyWidth +
+          static_cast<int>(definition.spanColumns - 1) * kColumnGap),
+      static_cast<int16_t>(rowOrigin(row) + kKeyHeight));
 }
 
 namespace detail {
