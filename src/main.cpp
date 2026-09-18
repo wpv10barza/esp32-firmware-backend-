@@ -177,8 +177,10 @@ void drawEditor() {
                        key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
     display->print(key.definition.label);
   }
-  drawButton(8, 172, 115, 36, "CANCELAR", color565(80, 35, 35));
-  drawButton(132, 172, 115, 36,
+  drawButton(8, 172, 100, 36, "CANCELAR", color565(80, 35, 35));
+  drawButton(112, 172, 72, 36, "<", color565(42, 67, 90));
+  drawButton(192, 172, 72, 36, "DEL", color565(105, 72, 40));
+  drawButton(272, 172, 115, 36,
              keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC",
              color565(45, 70, 100));
 }
@@ -567,7 +569,8 @@ void configureWebServer() {
     web.send(checkBackendHealth() ? 200 : 502, "application/json", lastBackendMessage);
   });
   web.on("/api/3c", HTTP_POST, [] {
-    const int code = send3CCommand(web.arg("text"));
+    app_config::commandBuffer = web.arg("text");
+    const int code = send3CCommand(app_config::commandBuffer);
     web.send(code == 200 || code == 202 ? 202 : 502, "application/json", lastBackendMessage);
   });
   web.onNotFound([] { web.send(404, "application/json", "{\"error\":\"not found\"}"); });
@@ -629,9 +632,10 @@ void handleTouch() {
               commandBuffer.insert(' ');
               break;
             case KeyKind::Enter:
+              app_config::commandBuffer = commandBuffer.c_str();
               commandEditorOpen = false;
               drawPanel();
-              send3CCommand(commandBuffer.c_str());
+              send3CCommand(app_config::commandBuffer);
               touchDown = sample.touched;
               return;
             case KeyKind::ToggleAlphaNumeric:
@@ -642,9 +646,22 @@ void handleTouch() {
           }
           drawEditor();
         }
-      } else if (sample.y >= 160 && sample.y < 215 && sample.x < 125) {
-        commandEditorOpen = false;
-        drawPanel();
+      } else if (sample.y >= 160 && sample.y < 215) {
+        if (sample.x < 110) {
+          commandEditorOpen = false;
+          drawPanel();
+        } else if (sample.x < 190) {
+          commandBuffer.moveLeft();
+          drawEditor();
+        } else if (sample.x < 270) {
+          commandBuffer.deleteForward();
+          drawEditor();
+        } else if (sample.x < 395) {
+          keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
+              ? virtual_keyboard::KeyboardMode::NumericSymbols
+              : virtual_keyboard::KeyboardMode::Alpha;
+          drawEditor();
+        }
       } else if (sample.y >= 42 && sample.y < 114) {
         // Tap in the text field: place cursor approximately at the tapped character.
         String text(commandBuffer.c_str());
@@ -687,7 +704,7 @@ void setup() {
   if (!displayReady) Serial.println("No se pudo inicializar la pantalla ST7701.");
   Wire.begin(pins::touchSda, pins::touchScl, 400000);
   audioReady = initializeAudio();
-  commandBuffer.set(app_config::defaultCommand);
+  commandBuffer.set(app_config::commandBuffer.c_str());
   updatePanel(PanelState::Booting, "Hardware inicializado");
   playTone(520, 60);
   connectWifi();
