@@ -24,6 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: wpv10barza/asistente-3c
+          ref: 897220b2b09cd5c843a33fb2e0ef8c8ed6cea6a9
           path: monitor
 
       - uses: actions/setup-python@v5
