@@ -219,7 +219,14 @@ test('real Monitor UI can reject a pending command and close the device state', 
   await expect(page.getByText('Cambia la tarea J10 a mensual')).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Revisar comando' }).click();
   await expect(page.getByText('Cambios por confirmar · fila 5')).toBeVisible({ timeout: 10000 });
+
+  const deviceResult = page.waitForResponse(response =>
+    response.url().includes(`/api/device/v1/commands/${encodeURIComponent(queued.command_id)}/result`) &&
+    response.request().method() === 'POST' &&
+    response.status() === 200,
+  );
   await page.getByRole('button', { name: 'Cancelar' }).click();
+  await deviceResult;
 
   expect(proposalCreated).toBe(true);
 
