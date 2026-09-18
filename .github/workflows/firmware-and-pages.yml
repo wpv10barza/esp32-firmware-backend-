@@ -59,7 +59,7 @@ jobs:
         run: |
           npm ci
           npm run lint
-          npm test
+          find test -type f -name '*.test.ts' -print0 | xargs -0 node --import tsx --test
 
       - name: Start real Monitor for ESP32 E2E
         env:
