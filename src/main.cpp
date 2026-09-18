@@ -11,6 +11,9 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "command_buffer.h"
+#include "command_text_viewport.h"
+#include "virtual_keyboard.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -59,6 +62,10 @@ bool audioReady = false;
 bool mdnsReady = false;
 bool wifiAnnounced = false;
 bool touchDown = false;
+constexpr size_t kCommandCapacity = 240;
+CommandBuffer<kCommandCapacity> commandBuffer;
+virtual_keyboard::KeyboardMode keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+bool commandEditorOpen = false;
 
 struct TouchSample {
   bool ready = false;
@@ -129,7 +136,55 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
   display->print(label);
 }
 
+void drawEditor() {
+  if (!displayReady) return;
+  display->fillScreen(color565(8, 18, 30));
+  drawCentered("EDITAR ORDEN 3C", 10, 2, color565(170, 220, 255));
+  display->drawRect(8, 42, 464, 72, color565(185, 210, 230));
+  display->setTextSize(2);
+  display->setTextColor(WHITE);
+
+  uint16_t prefixWidths[kCommandCapacity + 1] = {};
+  String full(commandBuffer.c_str());
+  for (size_t i = 0; i < full.length() && i < kCommandCapacity; ++i) {
+    int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
+    display->getTextBounds(full.substring(0, i + 1), 0, 0, &x1, &y1, &w, &h);
+    prefixWidths[i + 1] = w;
+  }
+  const auto window = command_text_viewport::compute(
+      prefixWidths, commandBuffer.length(), commandBuffer.cursor(), 450, 3);
+  const String visible = full.substring(window.first, window.last);
+  display->setCursor(15, 68);
+  display->print(visible);
+  const int cursorX = 15 + window.cursorX;
+  display->drawFastVLine(cursorX, 57, 28, color565(80, 220, 160));
+
+  virtual_keyboard::Key keys[50]{};
+  const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
+  for (size_t i = 0; i < count; ++i) {
+    const auto& key = keys[i];
+    const auto fill = key.definition.kind == virtual_keyboard::KeyKind::Enter
+        ? color565(18, 105, 73) : color565(25, 45, 65);
+    display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
+                           key.rect.bottom - key.rect.top, 7, fill);
+    display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
+                           key.rect.bottom - key.rect.top, 7, color565(130, 160, 180));
+    display->setTextSize(key.definition.label[0] && strlen(key.definition.label) > 2 ? 1 : 2);
+    int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
+    display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
+    display->setTextColor(WHITE);
+    display->setCursor(key.rect.left + ((key.rect.right-key.rect.left)-w)/2,
+                       key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
+    display->print(key.definition.label);
+  }
+  drawButton(8, 172, 115, 36, "CANCELAR", color565(80, 35, 35));
+  drawButton(132, 172, 115, 36,
+             keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC",
+             color565(45, 70, 100));
+}
+  
 void drawPanel() {
+  if (commandEditorOpen) { drawEditor(); return; }
   if (!displayReady) return;
   const uint16_t background = stateBackground(panelState);
   const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
@@ -557,9 +612,66 @@ void connectWifi() {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown && sample.y >= 350) {
-    if (sample.x < 240) checkBackendHealth();
-    else send3CCommand(app_config::defaultCommand);
+  if (sample.touched && !touchDown) {
+    if (commandEditorOpen) {
+      if (sample.y >= 216) {
+        virtual_keyboard::Key key{};
+        if (virtual_keyboard::hitTest(keyboardMode, sample.x, sample.y, &key)) {
+          using virtual_keyboard::KeyKind;
+          switch (key.definition.kind) {
+            case KeyKind::Character:
+              commandBuffer.insert(key.definition.label);
+              break;
+            case KeyKind::Backspace:
+              commandBuffer.backspace();
+              break;
+            case KeyKind::Space:
+              commandBuffer.insert(' ');
+              break;
+            case KeyKind::Enter:
+              commandEditorOpen = false;
+              drawPanel();
+              send3CCommand(commandBuffer.c_str());
+              touchDown = sample.touched;
+              return;
+            case KeyKind::ToggleAlphaNumeric:
+              keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
+                  ? virtual_keyboard::KeyboardMode::NumericSymbols
+                  : virtual_keyboard::KeyboardMode::Alpha;
+              break;
+          }
+          drawEditor();
+        }
+      } else if (sample.y >= 160 && sample.y < 215 && sample.x < 125) {
+        commandEditorOpen = false;
+        drawPanel();
+      } else if (sample.y >= 42 && sample.y < 114) {
+        // Tap in the text field: place cursor approximately at the tapped character.
+        String text(commandBuffer.c_str());
+        if (text.length()) {
+          display->setTextSize(2);
+          size_t best = 0;
+          uint16_t bestDistance = UINT16_MAX;
+          for (size_t i = 0; i <= text.length() && i <= kCommandCapacity; ++i) {
+            int16_t x1=0,y1=0; uint16_t w=0,h=0;
+            display->getTextBounds(text.substring(0, i), 0, 0, &x1, &y1, &w, &h);
+            const uint16_t distance = static_cast<uint16_t>(
+              abs(static_cast<int>(15 + w) - static_cast<int>(sample.x)));
+            if (distance < bestDistance) { bestDistance = distance; best = i; }
+          }
+          commandBuffer.setCursor(best);
+          drawEditor();
+        }
+      }
+    } else if (sample.y >= 350) {
+      if (sample.x < 240) {
+        checkBackendHealth();
+      } else {
+        commandEditorOpen = true;
+        keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+        drawEditor();
+      }
+    }
   }
   touchDown = sample.touched;
 }
@@ -575,6 +687,7 @@ void setup() {
   if (!displayReady) Serial.println("No se pudo inicializar la pantalla ST7701.");
   Wire.begin(pins::touchSda, pins::touchScl, 400000);
   audioReady = initializeAudio();
+  commandBuffer.set(app_config::defaultCommand);
   updatePanel(PanelState::Booting, "Hardware inicializado");
   playTone(520, 60);
   connectWifi();
