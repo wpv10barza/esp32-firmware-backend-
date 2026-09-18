@@ -1,0 +1,50 @@
+name: Physical ESP32 E2E evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_command_e2e:
+        description: 'Also exercise POST/poll lifecycle; requires human web confirmation'
+        required: true
+        default: false
+        type: boolean
+      command_text:
+        description: 'Command text for the physical E2E run'
+        required: true
+        default: 'E2E physical validation'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  physical-e2e:
+    # This job MUST run on a runner physically connected to the ESP32.
+    # It is intentionally separate from ubuntu-latest CI so CI cannot claim a physical test.
+    runs-on: [self-hosted, esp32-4848s040]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify physical runner contract
+        shell: bash
+        run: |
+          test -n "$ESP32_SERIAL_PORT"
+          test -n "$ESP32_IP"
+          test -e "$ESP32_SERIAL_PORT"
+          python3 --version
+          echo "Physical runner contract: PASS"
+      - name: Install physical test dependency
+        run: python3 -m pip install --user pyserial==3.5
+      - name: Capture real ESP32 -> backend E2E evidence
+        env:
+          RUN_COMMAND_E2E: ${{ inputs.run_command_e2e }}
+          COMMAND_TEXT: ${{ inputs.command_text }}
+          EVIDENCE_DIR: physical-e2e-evidence
+        run: python3 tests/physical_e2e.py
+      - name: Upload physical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-esp32-e2e-${{ github.run_id }}
+          path: physical-e2e-evidence/
+          if-no-files-found: error
