@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: wpv10barza/asistente-3c
-          ref: 897220b2b09cd5c843a33fb2e0ef8c8ed6cea6a9
+          ref: 5dccdf7ed9718fd4f6f84595d5fc610bf948576c
           path: monitor
 
       - uses: actions/setup-python@v5
@@ -65,6 +65,7 @@ jobs:
         env:
           GEMINI_API_KEY: ci-placeholder
           ESP32_API_TOKEN: ci-e2e-token
+          VITE_E2E_MODE: "true"
           PORT: "3000"
           ALLOW_INSECURE_DEVICE_API: "false"
         run: |
@@ -93,6 +94,19 @@ jobs:
           DEVICE_API_BASE_URL: http://127.0.0.1:3000
           ESP32_API_TOKEN: ci-e2e-token
         run: python tests/test_device_api_e2e.py
+
+      - name: Install browser E2E runner
+        working-directory: .ci
+        run: |
+          npm init -y
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run real Monitor UI E2E
+        env:
+          MONITOR_BASE_URL: http://127.0.0.1:3000
+          ESP32_API_TOKEN: ci-e2e-token
+        run: .ci/node_modules/.bin/playwright test e2e/monitor_ui.spec.mjs --reporter=line
 
       - name: Dump Monitor log on failure
         if: failure()
