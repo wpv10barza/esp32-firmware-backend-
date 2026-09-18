@@ -30,10 +30,25 @@ jobs:
         run: python tests/test_wifi_source.py
       - name: Test panel E2E state contract
         run: python tests/test_panel_state_contract.py
+      - name: Test runtime command editor integration
+        run: python tests/test_command_editor_integration.py
+      - name: Test ESP32 device API E2E protocol
+        run: python tests/test_device_api_e2e.py
       - name: Install PlatformIO
         run: pip install platformio==6.2.0
       - name: Verify PlatformIO Core
         run: pio --version
+      - name: Run standalone native component tests
+        run: |
+          set -euo pipefail
+          mkdir -p .ci/bin
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude tests/test_command_buffer_native.cpp -o .ci/bin/command_buffer_native
+          .ci/bin/command_buffer_native
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/command_text_viewport_test.cpp -o .ci/bin/command_text_viewport_test
+          .ci/bin/command_text_viewport_test
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/virtual_keyboard_hit_test.cpp -o .ci/bin/virtual_keyboard_hit_test
+          .ci/bin/virtual_keyboard_hit_test
+          python test/command_buffer_regression.py
       - name: Compile ESP32-S3-4848S040
         run: pio run --environment panel_4848s040
       - name: Package reproducible binaries

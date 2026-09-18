@@ -50,7 +50,9 @@ static constexpr char wifiPassword[] = WIFI_PASSWORD_VALUE;
 static constexpr char assistantBaseUrl[] = ASSISTANT_BASE_URL_VALUE;
 static constexpr char apiToken[] = ESP32_API_TOKEN_VALUE;
 static constexpr char deviceId[] = DEVICE_ID_VALUE;
-static constexpr char defaultCommand[] = DEFAULT_3C_COMMAND_VALUE;
+// Runtime source of truth for ENVIAR 3C. The default is only the initial value.
+static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;
+static String& defaultCommand = commandBuffer;
 static constexpr bool panelAudioEnabled = PANEL_AUDIO_ENABLED_VALUE != 0;
 static constexpr uint8_t panelBrightness = PANEL_BRIGHTNESS_VALUE;
 static constexpr unsigned long wifiRetryMs = 10000UL;
