@@ -122,7 +122,7 @@ code, pending = request(
 )
 assert code == 200, pending
 assert pending["command"]["status"] == "pending_confirmation", pending
-assert pending["command"]["text"] == command, pending
+assert pending["command"]["request_id"] == request_id, pending
 
 # This POST represents the Monitor/UI's human-confirmation result.
 code, applied = request(
