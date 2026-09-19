@@ -84,7 +84,7 @@ uint16_t stateAccent(PanelState state) {
     case PanelState::Rejected:
     case PanelState::Error: return ui_style::kDanger;
     case PanelState::Offline:
-    case PanelState::Booting: return ui_style::kSurface;
+    case PanelState::Booting: return ui_style::kSteelBlue;
   }
   return ui_style::kSurface;
 }
@@ -176,7 +176,7 @@ void drawEditorKeyboard() {
     const int width = key.rect.right - key.rect.left;
     const int height = key.rect.bottom - key.rect.top;
 
-    uint16_t fill = ui_style::kSurface;
+    uint16_t fill = ui_style::kSteelBlue;
     if (key.definition.kind == virtual_keyboard::KeyKind::Enter) {
       fill = ui_style::kSuccess;
     } else if (key.definition.kind == virtual_keyboard::KeyKind::ToggleAlphaNumeric) {
