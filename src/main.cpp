@@ -204,7 +204,7 @@ void drawPanel() {
   const uint16_t background = stateBackground(panelState);
   const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
   display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, themeColor(guition_monitor_theme::kWhite));
+  drawCentered("INTERFAZ PORTATIL", 18, 2, themeColor(guition_monitor_theme::kWhite));
 
   if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
     display->drawLine(112, 105, 172, 165, eye);
@@ -505,7 +505,7 @@ int send3CCommand(const String& rawCommand) {
       return code;
     }
     lastCommandPoll = millis();
-    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);
+    updatePanel(PanelState::Pending, "CONFIRMACION REQUERIDA EN WEB", true);
   } else {
     setTransportError("POST", code, lastBackendMessage, true);
   }
@@ -542,7 +542,7 @@ void pollCommandStatus() {
     setProtocolError("POLL", result.length() ? result : "Error reportado por WSL");
   } else if (status == "pending_confirmation" || status == "pending" || status == "pendiente") {
     backendAvailable = true;
-    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB");
+    updatePanel(PanelState::Pending, "CONFIRMACION REQUERIDA EN WEB");
   } else {
     setProtocolError("POLL", status.length() ? String("estado desconocido '") + status + "'" : "falta status");
   }
