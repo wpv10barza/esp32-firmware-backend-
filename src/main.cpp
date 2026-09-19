@@ -347,7 +347,7 @@ void updatePanel(PanelState state, const String& detail, bool sound = false) {
   // retains ownership of the display until the user exits edit mode.
   if (!commandEditorOpen && (changed || detailChanged)) drawPanel();
 
-  Serial.printf("PANEL STATE -> %s | %s\\n", stateLabel(panelState), panelDetail.c_str());
+  Serial.printf("PANEL STATE -> %s | %s\n", stateLabel(panelState), panelDetail.c_str());
   if (!sound || !changed) return;
   if (state == PanelState::Applied || state == PanelState::Ready) playTone(880, 70);
   else if (state == PanelState::Pending || state == PanelState::Busy) playTone(620, 55);
