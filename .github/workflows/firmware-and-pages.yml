@@ -49,6 +49,12 @@ jobs:
       - name: Test runtime command editor integration
         run: python tests/test_command_editor_integration.py
 
+      - name: Test empty command guard
+        run: python tests/test_empty_command_guard.py
+
+      - name: Test Guition 480x480 visual theme contract
+        run: python tests/test_guition_theme_contract.py
+
       - name: Install and test real Monitor
         working-directory: monitor
         env:
@@ -130,6 +136,8 @@ jobs:
           mkdir -p .ci/bin
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude tests/test_command_buffer_native.cpp -o .ci/bin/command_buffer_native
           .ci/bin/command_buffer_native
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude tests/test_command_validation_native.cpp -o .ci/bin/command_validation_native
+          .ci/bin/command_validation_native
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/command_text_viewport_test.cpp -o .ci/bin/command_text_viewport_test
           .ci/bin/command_text_viewport_test
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/virtual_keyboard_hit_test.cpp -o .ci/bin/virtual_keyboard_hit_test
