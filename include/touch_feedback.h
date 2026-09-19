@@ -7,8 +7,12 @@ namespace touch_feedback {
 // Millisecond durations are intentionally small enough to keep the editor
 // responsive while filtering GT911 contact bounce.
 struct Config {
-  uint32_t debounceMs = 80;
-  uint32_t highlightMs = 120;
+  uint32_t debounceMs;
+  uint32_t highlightMs;
+
+  constexpr Config() : debounceMs(80), highlightMs(120) {}
+  constexpr Config(uint32_t debounceMsValue, uint32_t highlightMsValue)
+      : debounceMs(debounceMsValue), highlightMs(highlightMsValue) {}
 };
 
 struct Event {
