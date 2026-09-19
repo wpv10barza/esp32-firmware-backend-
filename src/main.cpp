@@ -12,6 +12,7 @@
 
 #include "app_config.h"
 #include "command_buffer.h"
+#include "command_editor_transaction.h"
 #include "command_text_viewport.h"
 #include "virtual_keyboard.h"
 
@@ -77,9 +78,8 @@ constexpr size_t kCommandCapacity = 240;
 CommandBuffer<kCommandCapacity> commandBuffer;
 virtual_keyboard::KeyboardMode keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
 bool commandEditorOpen = false;
-CommandBuffer<kCommandCapacity> editorSavedBuffer;
+CommandEditSession<kCommandCapacity> editorSession;
 virtual_keyboard::KeyboardMode editorSavedKeyboardMode = virtual_keyboard::KeyboardMode::Alpha;
-bool editorTransactionActive = false;
 
 void drawEditor();
 void drawPanel();
@@ -146,19 +146,14 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
 }
 
 void openCommandEditor() {
-  editorSavedBuffer.set(commandBuffer.c_str());
+  editorSession.begin(commandBuffer);
   editorSavedKeyboardMode = keyboardMode;
-  editorTransactionActive = true;
   commandEditorOpen = true;
   drawEditor();
 }
 
 void cancelCommandEditor() {
-  if (editorTransactionActive) {
-    commandBuffer.set(editorSavedBuffer.c_str());
-    keyboardMode = editorSavedKeyboardMode;
-  }
-  editorTransactionActive = false;
+  if (editorSession.cancel(commandBuffer)) keyboardMode = editorSavedKeyboardMode;
   commandEditorOpen = false;
   drawPanel();
 }
@@ -169,8 +164,12 @@ bool saveCommandEditor() {
     drawEditor();
     return false;
   }
+  if (!editorSession.save(commandBuffer)) {
+    updatePanel(PanelState::Error, "Comando vacio", true);
+    drawEditor();
+    return false;
+  }
   app_config::commandBuffer = commandBuffer.c_str();
-  editorTransactionActive = false;
   commandEditorOpen = false;
   drawPanel();
   send3CCommand(app_config::commandBuffer);
