@@ -28,7 +28,7 @@ require(MAIN, 'setProtocolError("POST", "falta command_id");', "POST protocol er
 
 # The protocol failure cannot masquerade as a successful local 202 response.
 require(MAIN, 'return 502;', "POST protocol response")
-require(MAIN, 'return code == 200 || code == 202 ? 202 : 502;', "local API response mapping")
+require(MAIN, 'web.send(code == 200 || code == 202 ? 202 : 502,', "local API response mapping")
 
 # The state model itself contains the complete documented failure vocabulary.
 for needle in [
