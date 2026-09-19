@@ -128,7 +128,7 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
   display->drawRoundRect(x, y, width, height, panel_style::buttonRadius,
                        color565(panel_style::buttonBorder.r, panel_style::buttonBorder.g,
                                 panel_style::buttonBorder.b));
-  display->setTextSize(2);
+  display->setTextSize(panel_style::keyTextSize);
   int16_t x1 = 0;
   int16_t y1 = 0;
   uint16_t textWidth = 0;
@@ -149,8 +149,9 @@ void drawEditor() {
   display->drawRect(8, 42, 464, 72,
                     color565(panel_style::fieldBorder.r, panel_style::fieldBorder.g,
                              panel_style::fieldBorder.b));
-  display->setTextSize(2);
-  display->setTextColor(WHITE);
+  display->setTextSize(panel_style::keyTextSize);
+  display->setTextColor(color565(panel_style::text.r, panel_style::text.g,
+                                  panel_style::text.b));
 
   uint16_t prefixWidths[kCommandCapacity + 1] = {};
   String full(commandBuffer.c_str());
@@ -187,7 +188,8 @@ void drawEditor() {
                            : panel_style::keyTextSize);
     int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
     display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
-    display->setTextColor(WHITE);
+    display->setTextColor(color565(panel_style::text.r, panel_style::text.g,
+                                    panel_style::text.b));
     display->setCursor(key.rect.left + ((key.rect.right-key.rect.left)-w)/2,
                        key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
     display->print(key.definition.label);
@@ -231,7 +233,8 @@ void drawPanel() {
     display->fillCircle(338, 141, 13, background);
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
+  drawCentered(stateLabel(panelState), 250, panel_style::keyTextSize,
+               color565(panel_style::text.r, panel_style::text.g, panel_style::text.b));
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
   drawCentered(detail, 286, panel_style::secondaryTextSize,
@@ -243,8 +246,12 @@ void drawPanel() {
                           panel_style::title.b));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(panel_style::fieldBorder.r,
+                                                          panel_style::fieldBorder.g,
+                                                          panel_style::fieldBorder.b));
+  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(panel_style::enterFill.r,
+                                                           panel_style::enterFill.g,
+                                                           panel_style::enterFill.b));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
