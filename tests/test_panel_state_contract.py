@@ -23,7 +23,7 @@ require(MAIN, 'panel_state::fromPollStatus(', "poll transition mapping")
 require(MAIN, 'setTransportError("POST", code, lastBackendMessage, true);', "POST transport error")
 require(MAIN, 'setTransportError("POLL", code, body, true);', "poll transport error")
 require(MAIN, 'updatePanel(PanelState::Error, message, true);', "visible transport error")
-require(MAIN, 'setProtocolError("POLL"', "poll protocol error")
+require(MAIN, 'setProtocolError(\n        "POLL"', "poll protocol error")
 require(MAIN, 'setProtocolError("POST", "falta command_id");', "POST protocol error")
 
 # The protocol failure cannot masquerade as a successful local 202 response.
