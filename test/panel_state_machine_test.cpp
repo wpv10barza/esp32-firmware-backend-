@@ -31,9 +31,12 @@ int main() {
   assert(panel_state::fromPollStatus("rejected") == State::Rejected);
   assert(panel_state::fromPollStatus("REJECTED") == State::Rejected);
 
-  for (const char* value : {"error", "failed", "fallido", "ERROR", "FAILED", "FALLIDO"}) {
-    assert(panel_state::fromPollStatus(value) == State::Error);
-  }
+  assert(panel_state::fromPollStatus("error") == State::Error);
+  assert(panel_state::fromPollStatus("failed") == State::Error);
+  assert(panel_state::fromPollStatus("fallido") == State::Error);
+  assert(panel_state::fromPollStatus("ERROR") == State::Error);
+  assert(panel_state::fromPollStatus("FAILED") == State::Error);
+  assert(panel_state::fromPollStatus("FALLIDO") == State::Error);
 
   // Unknown/missing status must never leave the screen stuck in PENDING.
   assert(panel_state::fromPollStatus("") == State::Error);
