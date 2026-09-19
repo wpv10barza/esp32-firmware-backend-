@@ -125,15 +125,16 @@ void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
 void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
   if (!displayReady) return;
   display->fillRoundRect(x, y, width, height, 16, fill);
-  display->drawRoundRect(x, y, width, height, 16, color565(185, 210, 230));
-  display->setTextSize(2);
-  int16_t x1 = 0;
-  int16_t y1 = 0;
-  uint16_t textWidth = 0;
-  uint16_t textHeight = 0;
+  display->drawRoundRect(x, y, width, height, 16, ui_style::kSecondaryText);
+
+  display->setTextSize(ui_style::kButtonTextSize);
+  int16_t x1 = 0, y1 = 0;
+  uint16_t textWidth = 0, textHeight = 0;
   display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
-  display->setTextColor(WHITE);
-  display->setCursor(x + (width - textWidth) / 2, y + (height - textHeight) / 2);
+  display->setTextColor(ui_style::kPrimaryText);
+  display->setCursor(
+      x + (width - static_cast<int>(textWidth)) / 2,
+      y + (height - static_cast<int>(textHeight)) / 2);
   display->print(label);
 }
 
@@ -183,18 +184,16 @@ void drawEditorText() {
 
 void drawEditorKeyboard() {
   if (!displayReady) return;
-
-  display->fillRect(
-      0,
-      ui_style::kKeyboardY,
-      kScreenWidth,
-      kScreenHeight - ui_style::kKeyboardY,
-      ui_style::kBackground);
+  display->fillRect(0, ui_style::kKeyboardY, kScreenWidth,
+                    kScreenHeight - ui_style::kKeyboardY, ui_style::kBackground);
 
   virtual_keyboard::Key keys[50]{};
   const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
   for (size_t i = 0; i < count; ++i) {
     const auto& key = keys[i];
+    const int width = key.rect.right - key.rect.left;
+    const int height = key.rect.bottom - key.rect.top;
+
     uint16_t fill = ui_style::kSurface;
     if (key.definition.kind == virtual_keyboard::KeyKind::Enter) {
       fill = ui_style::kSuccess;
@@ -202,17 +201,59 @@ void drawEditorKeyboard() {
       fill = ui_style::kAccent;
     }
 
-    const int width = key.rect.right - key.rect.left;
-    const int height = key.rect.bottom - key.rect.top;
     display->fillRoundRect(key.rect.left, key.rect.top, width, height, 7, fill);
-    display->drawRoundRect(
-        key.rect.left, key.rect.top, width, height, 7, ui_style::kSecondaryText);
+    display->drawRoundRect(key.rect.left, key.rect.top, width, height, 7,
+                           ui_style::kSecondaryText);
 
-    const uint8_t size =
-        strlen(key.definition.label) > 2
-            ? ui_style::kSmallKeyboardTextSize
-            : ui_style::kKeyboardTextSize;
-    dvoid drawPanel() {
+    const uint8_t size = strlen(key.definition.label) > 2
+        ? ui_style::kSmallKeyboardTextSize
+        : ui_style::kKeyboardTextSize;
+    display->setTextSize(size);
+
+    int16_t x1 = 0, y1 = 0;
+    uint16_t w = 0, h = 0;
+    display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
+    display->setTextColor(ui_style::kPrimaryText);
+    display->setCursor(
+        key.rect.left + (width - static_cast<int>(w)) / 2,
+        key.rect.top + (height - static_cast<int>(h)) / 2);
+    display->print(key.definition.label);
+  }
+}
+
+void drawEditorStatic() {
+  if (!displayReady) return;
+  clearScreenForMode();
+
+  drawCentered("EDITAR ORDEN 3C", 8, ui_style::kTitleTextSize, ui_style::kAccent);
+
+  display->fillRoundRect(ui_style::kFieldX, ui_style::kFieldY,
+                         ui_style::kFieldWidth, ui_style::kFieldHeight,
+                         12, ui_style::kSurface);
+  display->drawRoundRect(ui_style::kFieldX, ui_style::kFieldY,
+                         ui_style::kFieldWidth, ui_style::kFieldHeight,
+                         12, ui_style::kSecondaryText);
+
+  drawButton(8, ui_style::kEditorControlY, 100, ui_style::kEditorControlHeight,
+             "CANCELAR", ui_style::kSurface);
+  drawButton(112, ui_style::kEditorControlY, 72, ui_style::kEditorControlHeight,
+             "<", ui_style::kSurface);
+  drawButton(192, ui_style::kEditorControlY, 72, ui_style::kEditorControlHeight,
+             "DEL", ui_style::kWarning);
+  drawButton(272, ui_style::kEditorControlY, 115, ui_style::kEditorControlHeight,
+             keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC",
+             ui_style::kAccent);
+
+  drawEditorKeyboard();
+}
+
+void drawEditor() {
+  if (!displayReady) return;
+  drawEditorStatic();
+  drawEditorText();
+}
+
+void drawPanel() {
   if (commandEditorOpen) {
     drawEditor();
     return;
