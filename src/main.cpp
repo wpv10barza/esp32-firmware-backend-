@@ -14,6 +14,8 @@
 #include "command_buffer.h"
 #include "command_text_viewport.h"
 #include "virtual_keyboard.h"
+#include "command_validation.h"
+#include "guition_theme.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -78,6 +80,10 @@ uint16_t color565(uint8_t red, uint8_t green, uint8_t blue) {
   return display ? display->color565(red, green, blue) : 0;
 }
 
+uint16_t theme565(const guition_theme::Rgb& rgb) {
+  return color565(rgb.red, rgb.green, rgb.blue);
+}
+
 const char* stateLabel(PanelState state) {
   switch (state) {
     case PanelState::Booting: return "INICIANDO";
@@ -94,14 +100,14 @@ const char* stateLabel(PanelState state) {
 
 uint16_t stateBackground(PanelState state) {
   switch (state) {
-    case PanelState::Ready: return color565(5, 45, 27);
-    case PanelState::Busy: return color565(8, 28, 58);
-    case PanelState::Pending: return color565(68, 43, 2);
-    case PanelState::Applied: return color565(2, 65, 28);
-    case PanelState::Rejected: return color565(62, 29, 3);
-    case PanelState::Error: return color565(65, 5, 9);
-    case PanelState::Offline: return color565(18, 22, 30);
-    case PanelState::Booting: return color565(10, 18, 38);
+    case PanelState::Ready: return theme565(guition_theme::slateBlueGray);
+    case PanelState::Busy: return theme565(guition_theme::steelBlue);
+    case PanelState::Pending: return theme565(guition_theme::amber);
+    case PanelState::Applied: return theme565(guition_theme::mint);
+    case PanelState::Rejected: return theme565(guition_theme::orange);
+    case PanelState::Error: return theme565(guition_theme::crimson);
+    case PanelState::Offline: return theme565(guition_theme::slateBlueGray);
+    case PanelState::Booting: return theme565(guition_theme::slateBlueGray);
   }
   return 0;
 }
@@ -123,26 +129,26 @@ void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
 
 void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
   if (!displayReady) return;
-  display->fillRoundRect(x, y, width, height, 16, fill);
-  display->drawRoundRect(x, y, width, height, 16, color565(185, 210, 230));
+  display->fillRoundRect(x, y, width, height, guition_theme::controlRadius, fill);
+  display->drawRoundRect(x, y, width, height, guition_theme::controlRadius, theme565(guition_theme::mistyBlue));
   display->setTextSize(2);
   int16_t x1 = 0;
   int16_t y1 = 0;
   uint16_t textWidth = 0;
   uint16_t textHeight = 0;
   display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
-  display->setTextColor(WHITE);
+  display->setTextColor(theme565(guition_theme::white));
   display->setCursor(x + (width - textWidth) / 2, y + (height - textHeight) / 2);
   display->print(label);
 }
 
 void drawEditor() {
   if (!displayReady) return;
-  display->fillScreen(color565(8, 18, 30));
-  drawCentered("EDITAR ORDEN 3C", 10, 2, color565(170, 220, 255));
-  display->drawRect(8, 42, 464, 72, color565(185, 210, 230));
+  display->fillScreen(theme565(guition_theme::slateBlueGray));
+  drawCentered("EDITAR ORDEN 3C", 10, 2, theme565(guition_theme::skyBlue));
+  display->drawRoundRect(8, 42, 464, 72, guition_theme::panelRadius, theme565(guition_theme::mistyBlue));
   display->setTextSize(2);
-  display->setTextColor(WHITE);
+  display->setTextColor(theme565(guition_theme::white));
 
   uint16_t prefixWidths[kCommandCapacity + 1] = {};
   String full(commandBuffer.c_str());
@@ -157,41 +163,41 @@ void drawEditor() {
   display->setCursor(15, 68);
   display->print(visible);
   const int cursorX = 15 + window.cursorX;
-  display->drawFastVLine(cursorX, 57, 28, color565(80, 220, 160));
+  display->drawFastVLine(cursorX, 57, 28, theme565(guition_theme::mint));
 
   virtual_keyboard::Key keys[50]{};
   const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
   for (size_t i = 0; i < count; ++i) {
     const auto& key = keys[i];
     const auto fill = key.definition.kind == virtual_keyboard::KeyKind::Enter
-        ? color565(18, 105, 73) : color565(25, 45, 65);
+        ? theme565(guition_theme::mint) : theme565(guition_theme::steelBlue);
     display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
                            key.rect.bottom - key.rect.top, 7, fill);
     display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 7, color565(130, 160, 180));
+                           key.rect.bottom - key.rect.top, 7, theme565(guition_theme::mistyBlue));
     display->setTextSize(key.definition.label[0] && strlen(key.definition.label) > 2 ? 1 : 2);
     int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
     display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
-    display->setTextColor(WHITE);
+    display->setTextColor(theme565(guition_theme::white));
     display->setCursor(key.rect.left + ((key.rect.right-key.rect.left)-w)/2,
                        key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
     display->print(key.definition.label);
   }
-  drawButton(8, 172, 100, 36, "CANCELAR", color565(80, 35, 35));
-  drawButton(112, 172, 72, 36, "<", color565(42, 67, 90));
-  drawButton(192, 172, 72, 36, "DEL", color565(105, 72, 40));
+  drawButton(8, 172, 100, 36, "CANCELAR", theme565(guition_theme::crimson));
+  drawButton(112, 172, 72, 36, "<", theme565(guition_theme::darkBlue));
+  drawButton(192, 172, 72, 36, "DEL", theme565(guition_theme::orange));
   drawButton(272, 172, 115, 36,
              keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC",
-             color565(45, 70, 100));
+             theme565(guition_theme::darkBlue));
 }
   
 void drawPanel() {
   if (commandEditorOpen) { drawEditor(); return; }
   if (!displayReady) return;
   const uint16_t background = stateBackground(panelState);
-  const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
+  const uint16_t eye = panelState == PanelState::Offline ? theme565(guition_theme::steelBlue) : theme565(guition_theme::white);
   display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
+  drawCentered("Interfaz Portátil", 18, 2, theme565(guition_theme::skyBlue));
 
   if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
     display->drawLine(112, 105, 172, 165, eye);
@@ -216,13 +222,13 @@ void drawPanel() {
   drawCentered(stateLabel(panelState), 250, 2, WHITE);
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
+  drawCentered(detail, 286, 1, theme565(guition_theme::mistyBlue));
   if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
+    drawCentered(WiFi.localIP().toString(), 310, 1, theme565(guition_theme::lightBlue));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(20, 370, 210, 82, "PROBAR WSL", theme565(guition_theme::darkBlue));
+  drawButton(250, 370, 210, 82, "ENVIAR 3C", theme565(guition_theme::mint));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -468,12 +474,19 @@ bool checkBackendHealth() {
 }
 
 int send3CCommand(const String& rawCommand) {
+  // Validate before trimming, network access, or request construction. A
+  // whitespace-only command must never reach the backend.
   String command = rawCommand;
-  command.trim();
-  if (!command.length()) {
-    updatePanel(PanelState::Error, "Comando vacio", true);
+  if (command_validation::isBlank(command.c_str())) {
+    lastBackendMessage = String("{\"error\":\"") +
+                         command_validation::kEmptyCommandMessage + "\"}";
+    updatePanel(PanelState::Error, command_validation::kEmptyCommandMessage, true);
+    Serial.println("[BLOCKED] empty 3C command rejected before HTTP POST");
     return 400;
   }
+  command.trim();
+  app_config::commandBuffer = command;
+
   if (WiFi.status() != WL_CONNECTED) {
     updatePanel(PanelState::Offline, "Wi-Fi desconectado", true);
     return 503;
@@ -550,7 +563,7 @@ void pollCommandStatus() {
 
 const char controlPage[] PROGMEM = R"HTML(
 <!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{font-family:system-ui;max-width:680px;margin:auto;padding:24px;background:#eef3f7}section{background:white;padding:20px;border-radius:16px;box-shadow:0 5px 20px #0001}button,textarea{font:inherit}button{padding:13px 18px;border:0;border-radius:10px;background:#08784f;color:white}textarea{box-sizing:border-box;width:100%;min-height:120px;padding:12px;margin:8px 0 12px}.warn{color:#805500}</style>
+<style>body{font-family:system-ui;max-width:680px;margin:auto;padding:24px;background:#343645;color:#f2f0eb}section{background:#606682;padding:20px;border-radius:20px;box-shadow:0 5px 20px #0d0d0d99}button,textarea{font:inherit}button{padding:13px 18px;border:1px solid #9ba2bc;border-radius:16px;background:#39d19c;color:#0d0d0d;font-weight:700;margin:4px}textarea{box-sizing:border-box;width:100%;min-height:120px;padding:12px;margin:8px 0 12px;border:1px solid #9ba2bc;border-radius:16px;background:#343645;color:#f2f0eb}.warn{color:#f4a900;font-weight:600}</style>
 <h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">La orden se envía al backend y queda pendiente de confirmación en la web. Google Sheets cambia solo después de la confirmación web.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="send3c()">Enviar al asistente</button><button onclick="health()">Probar WSL</button><pre id="result"></pre></section>
 <script>async function send3c(){const b=new URLSearchParams({text:document.querySelector('#text').value});const r=await fetch('/api/3c',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b});result.textContent=r.status+' '+await r.text()}async function health(){const r=await fetch('/api/backend-health',{method:'POST'});result.textContent=r.status+' '+await r.text()}</script></html>
 )HTML";
@@ -569,9 +582,10 @@ void configureWebServer() {
     web.send(checkBackendHealth() ? 200 : 502, "application/json", lastBackendMessage);
   });
   web.on("/api/3c", HTTP_POST, [] {
-    app_config::commandBuffer = web.arg("text");
-    const int code = send3CCommand(app_config::commandBuffer);
-    web.send(code == 200 || code == 202 ? 202 : 502, "application/json", lastBackendMessage);
+    const String rawCommand = web.arg("text");
+    const int code = send3CCommand(rawCommand);
+    const int responseCode = code == 400 ? 400 : (code == 200 || code == 202 ? 202 : 502);
+    web.send(responseCode, "application/json", lastBackendMessage);
   });
   web.onNotFound([] { web.send(404, "application/json", "{\"error\":\"not found\"}"); });
   web.begin();
@@ -631,13 +645,16 @@ void handleTouch() {
             case KeyKind::Space:
               commandBuffer.insert(' ');
               break;
-            case KeyKind::Enter:
-              app_config::commandBuffer = commandBuffer.c_str();
+            case KeyKind::Enter: {
+              // Leave editor mode before the submit so a blocked empty command
+              // is visible as a persistent ERROR notification on the main panel.
+              const String submittedCommand = commandBuffer.c_str();
               commandEditorOpen = false;
               drawPanel();
-              send3CCommand(app_config::commandBuffer);
+              send3CCommand(submittedCommand);
               touchDown = sample.touched;
               return;
+            }
             case KeyKind::ToggleAlphaNumeric:
               keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
                   ? virtual_keyboard::KeyboardMode::NumericSymbols
