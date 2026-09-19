@@ -581,7 +581,7 @@ int send3CCommand(const String& rawCommand) {
         panel_state::fromPost(code, lastCommandId.length() != 0);
     if (panel_state::isError(nextState)) {
       setProtocolError("POST", "falta command_id");
-      Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
+      Serial.printf("POST 3C -> %d %s\\n", code, lastBackendMessage.c_str());
       return 502;
     }
     lastCommandPoll = millis();
@@ -589,15 +589,8 @@ int send3CCommand(const String& rawCommand) {
   } else {
     setTransportError("POST", code, lastBackendMessage, true);
   }
-  Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
-      return code;
-    }
-    lastCommandPoll = millis();
-    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);
-  } else {
-    setTransportError("POST", code, lastBackendMessage, true);
-  }
-  Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
+
+  Serial.printf("POST 3C -> %d %s\\n", code, lastBackendMessage.c_str());
   return code;
 }
 
