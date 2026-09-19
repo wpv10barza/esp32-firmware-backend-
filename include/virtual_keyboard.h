@@ -74,6 +74,13 @@ struct Key {
   KeyRect rect;
 };
 
+// Hit-testing primitive for one rendered virtual-key frame.
+// The frame is half-open on the right/bottom edges so adjacent frames can never
+// claim the same boundary pixel.
+constexpr bool hitTestFrame(const KeyRect& frame, int x, int y) {
+  return frame.contains(x, y);
+}
+
 struct Row {
   const KeyDefinition* definitions;
   size_t count;
@@ -259,24 +266,32 @@ inline size_t buildKeys(KeyboardMode mode, Key* out, size_t capacity) {
 // deliberately exclusive: the first valid half-open rectangle wins, and the
 // layout tests ensure that no two key rectangles overlap.
 inline int hitTestIndex(KeyboardMode mode, int x, int y) {
-  std::array<Key, 50> keys{};
-  const size_t count = buildKeys(mode, keys.data(), keys.size());
-  for (size_t index = 0; index < count; ++index) {
-    if (keys[index].rect.contains(x, y)) return static_cast<int>(index);
+  int index = 0;
+  for (uint8_t row = 0; row < kRows; ++row) {
+    const Row definitions = rowDefinition(mode, row);
+    for (size_t key = 0; key < definitions.count; ++key, ++index) {
+      if (hitTestFrame(makeRect(definitions.definitions[key], row), x, y)) {
+        return index;
+      }
+    }
   }
   return -1;
 }
 
 inline bool hitTest(KeyboardMode mode, int x, int y, Key* matched = nullptr) {
-  const int index = hitTestIndex(mode, x, y);
-  if (index < 0) return false;
-
-  if (matched) {
-    std::array<Key, 50> keys{};
-    const size_t count = buildKeys(mode, keys.data(), keys.size());
-    if (static_cast<size_t>(index) < count) *matched = keys[static_cast<size_t>(index)];
+  int index = 0;
+  for (uint8_t row = 0; row < kRows; ++row) {
+    const Row definitions = rowDefinition(mode, row);
+    for (size_t key = 0; key < definitions.count; ++key, ++index) {
+      const KeyRect rect = makeRect(definitions.definitions[key], row);
+      if (!hitTestFrame(rect, x, y)) continue;
+      if (matched) {
+        *matched = Key{definitions.definitions[key], rect};
+      }
+      return true;
+    }
   }
-  return true;
+  return false;
 }
 
 }  // namespace virtual_keyboard
