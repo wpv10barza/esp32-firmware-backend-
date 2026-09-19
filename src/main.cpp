@@ -15,6 +15,7 @@
 #include "command_text_viewport.h"
 #include "virtual_keyboard.h"
 #include "ui_style.h"
+#include "panel_state_machine.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -39,16 +40,7 @@ WebServer web(80);
 Arduino_ESP32SPI* displayBus = nullptr;
 Arduino_RGB_Display* display = nullptr;
 
-enum class PanelState {
-  Booting,
-  Offline,
-  Ready,
-  Busy,
-  Pending,
-  Applied,
-  Rejected,
-  Error,
-};
+using PanelState = panel_state::State;
 
 PanelState panelState = PanelState::Booting;
 String panelDetail = "Iniciando";
@@ -80,17 +72,7 @@ uint16_t color565(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 const char* stateLabel(PanelState state) {
-  switch (state) {
-    case PanelState::Booting: return "INICIANDO";
-    case PanelState::Offline: return "SIN CONEXION";
-    case PanelState::Ready: return "WSL DISPONIBLE";
-    case PanelState::Busy: return "PROCESANDO";
-    case PanelState::Pending: return "PENDIENTE";
-    case PanelState::Applied: return "APLICADO";
-    case PanelState::Rejected: return "RECHAZADO";
-    case PanelState::Error: return "ERROR";
-  }
-  return "3C";
+  return panel_state::label(state);
 }
 
 uint16_t stateAccent(PanelState state) {
@@ -549,9 +531,11 @@ bool checkBackendHealth() {
   const int code = http.GET();
   lastBackendMessage = code > 0 ? http.getString() : http.errorToString(code);
   http.end();
-  backendAvailable = code == 200;
+  const PanelState nextState =
+      panel_state::fromHealth(WiFi.status() == WL_CONNECTED, code);
+  backendAvailable = nextState == PanelState::Ready;
   updatePanel(
-    backendAvailable ? PanelState::Ready : PanelState::Error,
+    nextState,
     backendAvailable ? "Endpoint 3C conectado" : String("Health HTTP ") + code,
     true);
   if (!backendAvailable) {
@@ -593,9 +577,19 @@ int send3CCommand(const String& rawCommand) {
   if (code == 200 || code == 202) {
     backendAvailable = true;
     lastCommandId = jsonStringValue(lastBackendMessage, "command_id");
-    if (!lastCommandId.length()) {
+    const PanelState nextState =
+        panel_state::fromPost(code, lastCommandId.length() != 0);
+    if (panel_state::isError(nextState)) {
       setProtocolError("POST", "falta command_id");
       Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
+      return 502;
+    }
+    lastCommandPoll = millis();
+    updatePanel(nextState, "CONFIRMACIÓN REQUERIDA EN WEB", true);
+  } else {
+    setTransportError("POST", code, lastBackendMessage, true);
+  }
+  Serial.printf("POST 3C -> %d %s\n", code, lastBackendMessage.c_str());
       return code;
     }
     lastCommandPoll = millis();
@@ -626,19 +620,22 @@ void pollCommandStatus() {
   const String result = jsonStringValue(body, "result");
   Serial.printf("GET command status -> %d status=%s result=%s\n", code, status.c_str(), result.c_str());
 
-  if (status == "applied") {
+  const PanelState nextState = panel_state::fromPollStatus(status.c_str());
+  if (nextState == PanelState::Applied) {
     updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en WSL", true);
     lastCommandId = "";
-  } else if (status == "rejected") {
+  } else if (nextState == PanelState::Rejected) {
     updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en WSL", true);
     lastCommandId = "";
-  } else if (status == "error" || status == "failed" || status == "fallido") {
-    setProtocolError("POLL", result.length() ? result : "Error reportado por WSL");
-  } else if (status == "pending_confirmation" || status == "pending" || status == "pendiente") {
+  } else if (nextState == PanelState::Pending) {
     backendAvailable = true;
     updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB");
   } else {
-    setProtocolError("POLL", status.length() ? String("estado desconocido '") + status + "'" : "falta status");
+    setProtocolError(
+        "POLL",
+        result.length()
+            ? result
+            : (status.length() ? String("estado desconocido '") + status + "'" : "falta status"));
   }
 }
 
