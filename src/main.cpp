@@ -1,6 +1,7 @@
 #if defined(BOARD_PANEL_4848S040)
 
 #include <Arduino.h>
+#include <climits>
 #include <Arduino_GFX_Library.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
