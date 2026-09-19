@@ -1,0 +1,40 @@
+name: ENVIAR 3C commandBuffer regression
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  command-buffer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: python -m pip install platformio==6.1.18
+
+      - name: Static transport contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          source = Path("src/main.cpp").read_text(encoding="utf-8")
+          match = re.search(r"int send3CCommand\(\)\s*\{(?P<body>.*?)\n\}", source, re.S)
+          assert match, "send3CCommand() must use the runtime command buffer with no raw argument"
+          body = match.group("body")
+          assert "command_source::for3C(commandBuffer)" in body, "3C POST must read commandBuffer at send time"
+          assert "app_config::defaultCommand" not in body, "3C POST must not depend on defaultCommand"
+          assert "send3CCommand(app_config::commandBuffer)" not in source
+          PY
+
+      - name: Run focused native regression
+        run: pio test -e native --filter "enviar3c_command_buffer"
