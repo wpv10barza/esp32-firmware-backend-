@@ -56,7 +56,8 @@ for needle in [
 
 # Background must be stable while editing; panel state updates are deferred
 # visually until the editor is closed so network polling cannot flicker typing.
-require(MAIN, "if (commandEditorOpen) return;")
+require(MAIN, "if (!commandEditorOpen && (changed || detailChanged)) drawPanel();")
+
 require(MAIN, "display->fillScreen(ui_style::kBackground);")
 
 # Old per-state full-screen backgrounds must not survive the style migration.
