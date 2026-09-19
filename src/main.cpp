@@ -744,7 +744,8 @@ void handleTouch() {
     } else {
       commandEditorOpen = true;
       keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
-      touchFeedback.reset();
+      // Keep the stable-touch state: the opening tap must not be recycled
+      // as the first keyboard key while the finger is still down.
       renderedHighlightedKey = -1;
       drawEditor();
       if (app_config::panelKeyAudioEnabled) playTone(900, 14);
