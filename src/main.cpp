@@ -85,6 +85,8 @@ uint16_t themeColor(const monitor_theme::Rgb& color) {
   return color565(color.red, color.green, color.blue);
 }
 
+void drawEditor();
+
 void setEditorNotice(const String& notice) {
   editorNotice = notice;
   drawEditor();
