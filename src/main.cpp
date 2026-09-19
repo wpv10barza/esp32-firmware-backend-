@@ -614,7 +614,7 @@ const char controlPage[] PROGMEM = R"HTML(
 void configureWebServer() {
   web.on("/", HTTP_GET, [] { web.send_P(200, "text/html; charset=utf-8", controlPage); });
   web.on("/api/diagnostics", HTTP_GET, [] {
-    const int freePsram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    const unsigned int freePsram = static_cast<unsigned int>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     const String body = String("{\"board\":\"ESP32-4848S040\",\"uptime_ms\":") + millis() +
       ",\"reset_reason":" + static_cast<int>(esp_reset_reason()) +
       ",\"psram\":" + (psramFound() ? "true" : "false") +
@@ -770,7 +770,7 @@ void setup() {
   Serial.printf("BOOT: RESET_REASON=%d\n", static_cast<int>(esp_reset_reason()));
   Serial.printf("ESP32-4848S040 3C | PSRAM: %s | %u bytes\n",
     psramFound() ? "OK" : "NO", ESP.getPsramSize());
-  if (psramFound()) Serial.printf("BOOT: PSRAM OK size=%u free=%d\n", ESP.getPsramSize(), heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+  if (psramFound()) Serial.printf("BOOT: PSRAM OK size=%u free=%u\n", ESP.getPsramSize(), static_cast<unsigned int>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)));
   else Serial.println("BOOT: PSRAM FAIL");
 
   displayReady = initializeDisplay();
@@ -831,8 +831,8 @@ void loop() {
 
   if (millis() - lastStabilityLog >= 30000UL) {
     lastStabilityLog = millis();
-    Serial.printf("STABILITY: uptime_ms=%lu free_heap=%u psram_free=%d wifi=%d reset_reason=%d\n",
-      millis(), ESP.getFreeHeap(), heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+    Serial.printf("STABILITY: uptime_ms=%lu free_heap=%u psram_free=%u wifi=%d reset_reason=%d\n",
+      millis(), ESP.getFreeHeap(), static_cast<unsigned int>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM)),
       static_cast<int>(WiFi.status()), static_cast<int>(esp_reset_reason()));
   }
   delay(5);
