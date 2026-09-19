@@ -57,7 +57,7 @@ capture_serial() {
   (
     timeout --signal=TERM "${seconds}s" pio device monitor --port "$PORT" --baud 115200 || true
   ) >"$output" 2>&1 &
-  echo $!
+  CAPTURE_PID=$!
 }
 
 wait_for_device_health() {
@@ -110,7 +110,8 @@ echo "PHYSICAL E2E: initial firmware upload"
 cp include/local_config.h "$BACKUP"
 pio run -e panel_4848s040 -t upload --upload-port "$PORT"
 
-BOOT_PID="$(capture_serial /tmp/esp32-e2e-boot.log 40)"
+capture_serial /tmp/esp32-e2e-boot.log 40
+BOOT_PID="$CAPTURE_PID"
 sleep 35
 kill "$BOOT_PID" 2>/dev/null || true
 wait "$BOOT_PID" 2>/dev/null || true
@@ -230,7 +231,8 @@ EOF
 echo "PHYSICAL E2E: uploading temporary failure-test firmware"
 pio run -e panel_4848s040 -t upload --upload-port "$PORT"
 
-TEST_PID="$(capture_serial /tmp/esp32-e2e-error.log 70)"
+capture_serial /tmp/esp32-e2e-error.log 70
+TEST_PID="$CAPTURE_PID"
 sleep 15
 TEST_DEVICE_IP="$(grep -Eo 'Wi-Fi listo: http://[0-9.]+/' /tmp/esp32-e2e-error.log | tail -n1 | sed -E 's#.*http://([0-9.]+)/#\1#')"
 if [[ -n "$TEST_DEVICE_IP" ]]; then
