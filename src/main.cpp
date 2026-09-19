@@ -15,6 +15,17 @@
 #include "command_text_viewport.h"
 #include "virtual_keyboard.h"
 
+namespace guition_style {
+constexpr uint8_t slateBlueGray[] = {0x34, 0x36, 0x45};
+constexpr uint8_t steelBlue[] = {0x60, 0x66, 0x82};
+constexpr uint8_t mistyBlue[] = {0x9B, 0xA2, 0xBC};
+constexpr uint8_t white[] = {0xF2, 0xF0, 0xEB};
+constexpr uint8_t skyBlue[] = {0x3F, 0xA7, 0xF3};
+constexpr uint8_t mint[] = {0x39, 0xD1, 0x9C};
+constexpr uint8_t crimson[] = {0xF5, 0x07, 0x5C};
+constexpr uint8_t amber[] = {0xF4, 0xA9, 0x00};
+}  // namespace guition_style
+
 namespace pins {
 constexpr int backlight = 38;
 constexpr int lcdCs = 39;
@@ -66,6 +77,14 @@ constexpr size_t kCommandCapacity = 240;
 CommandBuffer<kCommandCapacity> commandBuffer;
 virtual_keyboard::KeyboardMode keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
 bool commandEditorOpen = false;
+CommandBuffer<kCommandCapacity> editorSavedBuffer;
+virtual_keyboard::KeyboardMode editorSavedKeyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+bool editorTransactionActive = false;
+
+void drawEditor();
+void drawPanel();
+void updatePanel(PanelState state, const String& detail, bool sound = false);
+int send3CCommand(const String& rawCommand);
 
 struct TouchSample {
   bool ready = false;
@@ -92,19 +111,9 @@ const char* stateLabel(PanelState state) {
   return "3C";
 }
 
-uint16_t stateBackground(PanelState state) {
-  switch (state) {
-    case PanelState::Ready: return color565(5, 45, 27);
-    case PanelState::Busy: return color565(8, 28, 58);
-    case PanelState::Pending: return color565(68, 43, 2);
-    case PanelState::Applied: return color565(2, 65, 28);
-    case PanelState::Rejected: return color565(62, 29, 3);
-    case PanelState::Error: return color565(65, 5, 9);
-    case PanelState::Offline: return color565(18, 22, 30);
-    case PanelState::Booting: return color565(10, 18, 38);
-  }
-  return 0;
-}
+uint16_t guitionColor(const uint8_t rgb[3]) { return color565(rgb[0], rgb[1], rgb[2]); }
+
+uint16_t stateBackground(PanelState) { return guitionColor(guition_style::slateBlueGray); }
 
 void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
   if (!displayReady) return;
@@ -136,11 +145,43 @@ void drawButton(int x, int y, int width, int height, const char* label, uint16_t
   display->print(label);
 }
 
+void openCommandEditor() {
+  editorSavedBuffer.set(commandBuffer.c_str());
+  editorSavedKeyboardMode = keyboardMode;
+  editorTransactionActive = true;
+  commandEditorOpen = true;
+  drawEditor();
+}
+
+void cancelCommandEditor() {
+  if (editorTransactionActive) {
+    commandBuffer.set(editorSavedBuffer.c_str());
+    keyboardMode = editorSavedKeyboardMode;
+  }
+  editorTransactionActive = false;
+  commandEditorOpen = false;
+  drawPanel();
+}
+
+bool saveCommandEditor() {
+  if (!commandBuffer.length()) {
+    updatePanel(PanelState::Error, "Comando vacio", true);
+    drawEditor();
+    return false;
+  }
+  app_config::commandBuffer = commandBuffer.c_str();
+  editorTransactionActive = false;
+  commandEditorOpen = false;
+  drawPanel();
+  send3CCommand(app_config::commandBuffer);
+  return true;
+}
+
 void drawEditor() {
   if (!displayReady) return;
-  display->fillScreen(color565(8, 18, 30));
-  drawCentered("EDITAR ORDEN 3C", 10, 2, color565(170, 220, 255));
-  display->drawRect(8, 42, 464, 72, color565(185, 210, 230));
+  display->fillScreen(guitionColor(guition_style::slateBlueGray));
+  drawCentered("EDITAR ORDEN 3C", 10, 2, guitionColor(guition_style::skyBlue));
+  display->drawRect(8, 42, 464, 72, guitionColor(guition_style::steelBlue));
   display->setTextSize(2);
   display->setTextColor(WHITE);
 
@@ -164,11 +205,11 @@ void drawEditor() {
   for (size_t i = 0; i < count; ++i) {
     const auto& key = keys[i];
     const auto fill = key.definition.kind == virtual_keyboard::KeyKind::Enter
-        ? color565(18, 105, 73) : color565(25, 45, 65);
+        ? guitionColor(guition_style::mint) : guitionColor(guition_style::steelBlue);
     display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
                            key.rect.bottom - key.rect.top, 7, fill);
     display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 7, color565(130, 160, 180));
+                           key.rect.bottom - key.rect.top, 7, guitionColor(guition_style::mistyBlue));
     display->setTextSize(key.definition.label[0] && strlen(key.definition.label) > 2 ? 1 : 2);
     int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
     display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
@@ -177,21 +218,22 @@ void drawEditor() {
                        key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
     display->print(key.definition.label);
   }
-  drawButton(8, 172, 100, 36, "CANCELAR", color565(80, 35, 35));
-  drawButton(112, 172, 72, 36, "<", color565(42, 67, 90));
-  drawButton(192, 172, 72, 36, "DEL", color565(105, 72, 40));
+  drawButton(8, 172, 100, 36, "CANCELAR", guitionColor(guition_style::crimson));
+  drawButton(112, 172, 72, 36, "<", guitionColor(guition_style::steelBlue));
+  drawButton(192, 172, 72, 36, "DEL", guitionColor(guition_style::amber));
   drawButton(272, 172, 115, 36,
              keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC",
-             color565(45, 70, 100));
+             guitionColor(guition_style::steelBlue));
+  drawButton(395, 172, 77, 36, "OK", guitionColor(guition_style::mint));
 }
   
 void drawPanel() {
   if (commandEditorOpen) { drawEditor(); return; }
   if (!displayReady) return;
   const uint16_t background = stateBackground(panelState);
-  const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
+  const uint16_t eye = panelState == PanelState::Offline ? guitionColor(guition_style::mistyBlue) : guitionColor(guition_style::white);
   display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
+  drawCentered("Interfaz Portátil", 18, 2, guitionColor(guition_style::skyBlue));
 
   if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
     display->drawLine(112, 105, 172, 165, eye);
@@ -213,16 +255,16 @@ void drawPanel() {
     display->fillCircle(338, 141, 13, background);
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
+  drawCentered(stateLabel(panelState), 250, 2, guitionColor(guition_style::white));
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
+  drawCentered(detail, 286, 1, guitionColor(guition_style::mistyBlue));
   if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
+    drawCentered(WiFi.localIP().toString(), 310, 1, guitionColor(guition_style::skyBlue));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(20, 370, 210, 82, "PROBAR WSL", guitionColor(guition_style::skyBlue));
+  drawButton(250, 370, 210, 82, "ENVIAR 3C", guitionColor(guition_style::mint));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -632,10 +674,7 @@ void handleTouch() {
               commandBuffer.insert(' ');
               break;
             case KeyKind::Enter:
-              app_config::commandBuffer = commandBuffer.c_str();
-              commandEditorOpen = false;
-              drawPanel();
-              send3CCommand(app_config::commandBuffer);
+              saveCommandEditor();
               touchDown = sample.touched;
               return;
             case KeyKind::ToggleAlphaNumeric:
@@ -648,8 +687,9 @@ void handleTouch() {
         }
       } else if (sample.y >= 160 && sample.y < 215) {
         if (sample.x < 110) {
-          commandEditorOpen = false;
-          drawPanel();
+          cancelCommandEditor();
+        } else if (sample.x >= 395) {
+          saveCommandEditor();
         } else if (sample.x < 190) {
           commandBuffer.moveLeft();
           drawEditor();
@@ -684,9 +724,7 @@ void handleTouch() {
       if (sample.x < 240) {
         checkBackendHealth();
       } else {
-        commandEditorOpen = true;
-        keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
-        drawEditor();
+        openCommandEditor();
       }
     }
   }
