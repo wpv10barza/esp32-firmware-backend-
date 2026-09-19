@@ -343,10 +343,9 @@ void updatePanel(PanelState state, const String& detail, bool sound = false) {
   panelState = state;
   panelDetail = detail;
 
-  // Never repaint the whole panel while the user is typing. Network polling
-  // may update state in memory, but the active editor owns the display surface.
-  if (commandEditorOpen) return;
-  if (changed || detailChanged) drawPanel();
+  // While editing, network state is still recorded and logged, but the editor
+  // retains ownership of the display until the user exits edit mode.
+  if (!commandEditorOpen && (changed || detailChanged)) drawPanel();
 
   Serial.printf("PANEL STATE -> %s | %s\\n", stateLabel(panelState), panelDetail.c_str());
   if (!sound || !changed) return;
@@ -750,15 +749,16 @@ void handleTouch() {
           exitCommandEditor();
         } else if (sample.x < 190) {
           commandBuffer.moveLeft();
-          drawEditor();
+          drawEditorText();
         } else if (sample.x < 270) {
           commandBuffer.deleteForward();
-          drawEditor();
+          drawEditorText();
         } else if (sample.x < 395) {
           keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
               ? virtual_keyboard::KeyboardMode::NumericSymbols
               : virtual_keyboard::KeyboardMode::Alpha;
-          drawEditor();
+          drawEditorKeyboard();
+          drawEditorText();
         }
       } else if (sample.y >= 42 && sample.y < 114) {
         // Tap in the text field: place cursor approximately at the tapped character.
@@ -775,16 +775,14 @@ void handleTouch() {
             if (distance < bestDistance) { bestDistance = distance; best = i; }
           }
           commandBuffer.setCursor(best);
-          drawEditor();
+          drawEditorText();
         }
       }
     } else if (sample.y >= 350) {
       if (sample.x < 240) {
         checkBackendHealth();
       } else {
-        commandEditorOpen = true;
-        keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
-        drawEditor();
+        enterCommandEditor();
       }
     }
   }
