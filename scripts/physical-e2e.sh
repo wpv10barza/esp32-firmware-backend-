@@ -67,17 +67,22 @@ wait_for_device_health() {
   for _ in $(seq 1 25); do
     last="$(curl --silent --show-error --max-time 3 "http://${ip}/health" 2>&1 || true)"
     if [[ -n "$last" ]]; then
-      python3 - "$last" "$expected_backend" <<'PY'
+      if python3 - "$last" "$expected_backend" <<'PY'
 import json
 import sys
 
 payload = json.loads(sys.argv[1])
 expected_backend = sys.argv[2] == "true"
-if payload.get("ok") is True and payload.get("board") == "ESP32-4848S040" and payload.get("wifi") is True and payload.get("backend") is expected_backend:
+if (
+    payload.get("ok") is True
+    and payload.get("board") == "ESP32-4848S040"
+    and payload.get("wifi") is True
+    and payload.get("backend") == expected_backend
+):
     raise SystemExit(0)
 raise SystemExit(1)
 PY
-      if [[ $? -eq 0 ]]; then
+      then
         echo "$last"
         return 0
       fi
@@ -227,6 +232,15 @@ pio run -e panel_4848s040 -t upload --upload-port "$PORT"
 
 TEST_PID="$(capture_serial /tmp/esp32-e2e-error.log 70)"
 sleep 15
+TEST_DEVICE_IP="$(grep -Eo 'Wi-Fi listo: http://[0-9.]+/' /tmp/esp32-e2e-error.log | tail -n1 | sed -E 's#.*http://([0-9.]+)/#\1#')"
+if [[ -n "$TEST_DEVICE_IP" ]]; then
+  DEVICE_IP="$TEST_DEVICE_IP"
+fi
+if [[ -z "$DEVICE_IP" ]]; then
+  echo "PHYSICAL E2E: FAIL could not determine device IP after failure-test reboot" >&2
+  cat /tmp/esp32-e2e-error.log
+  exit 1
+fi
 
 CONTROL_CODE="$(curl --silent --show-error --max-time 5 -o /tmp/control-health-error.json -w '%{http_code}' -X POST "http://${RUNNER_IP}:3033/control/health-error")"
 if [[ "$CONTROL_CODE" != "200" ]]; then
