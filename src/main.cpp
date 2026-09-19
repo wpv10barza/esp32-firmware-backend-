@@ -112,28 +112,8 @@ uint16_t themeColor(const panel_theme::Rgb& color) {
   return color565(color.r, color.g, color.b);
 }
 
-void useTitleFont() {
-  display->setFont(u8g2_font_helvB18_tf);
-  display->setTextSize(1);
-}
-
-void useStateFont() {
-  display->setFont(u8g2_font_helvB24_tf);
-  display->setTextSize(1);
-}
-
-void useBodyFont() {
-  display->setFont(u8g2_font_helvR14_tf);
-  display->setTextSize(1);
-}
-
 void useEditorFont() {
   display->setFont(u8g2_font_helvR18_tf);
-  display->setTextSize(1);
-}
-
-void useButtonFont() {
-  display->setFont(u8g2_font_helvB14_tf);
   display->setTextSize(1);
 }
 
