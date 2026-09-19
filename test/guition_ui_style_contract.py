@@ -25,8 +25,8 @@ for token in [
 
 require(MAIN, '#include "ui_style.h"')
 # The Guition reference uses a black page background and slate-blue-gray surfaces.
-require(STYLE, "kBackground = rgb565(0x0D, 0x0D, 0x0D)", "Guition page background")
-require(STYLE, "kSurface = rgb565(0x34, 0x36, 0x45)", "Guition surface")
+require(STYLE, "kBackground = rgb565(0x0D, 0x0D, 0x0D)")
+require(STYLE, "kSurface = rgb565(0x34, 0x36, 0x45)")
 require(MAIN, "void clearScreenForMode()")
 require(MAIN, "void drawEditorText()")
 require(MAIN, "void drawEditorStatic()")
