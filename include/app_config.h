@@ -44,6 +44,19 @@
 #define PANEL_BRIGHTNESS_VALUE 180
 #endif
 
+// Key interaction feedback can be disabled independently from panel audio.
+#ifndef PANEL_KEY_AUDIO_ENABLED_VALUE
+#define PANEL_KEY_AUDIO_ENABLED_VALUE 1
+#endif
+
+#ifndef PANEL_TOUCH_DEBOUNCE_MS_VALUE
+#define PANEL_TOUCH_DEBOUNCE_MS_VALUE 80UL
+#endif
+
+#ifndef PANEL_KEY_HIGHLIGHT_MS_VALUE
+#define PANEL_KEY_HIGHLIGHT_MS_VALUE 120UL
+#endif
+
 namespace app_config {
 static constexpr char wifiSsid[] = WIFI_SSID_VALUE;
 static constexpr char wifiPassword[] = WIFI_PASSWORD_VALUE;
@@ -54,6 +67,9 @@ static constexpr char deviceId[] = DEVICE_ID_VALUE;
 static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;
 static String& defaultCommand = commandBuffer;
 static constexpr bool panelAudioEnabled = PANEL_AUDIO_ENABLED_VALUE != 0;
+static constexpr bool panelKeyAudioEnabled = PANEL_KEY_AUDIO_ENABLED_VALUE != 0;
+static constexpr unsigned long panelTouchDebounceMs = PANEL_TOUCH_DEBOUNCE_MS_VALUE;
+static constexpr unsigned long panelKeyHighlightMs = PANEL_KEY_HIGHLIGHT_MS_VALUE;
 static constexpr uint8_t panelBrightness = PANEL_BRIGHTNESS_VALUE;
 static constexpr unsigned long wifiRetryMs = 10000UL;
 static constexpr unsigned long healthCheckMs = 30000UL;

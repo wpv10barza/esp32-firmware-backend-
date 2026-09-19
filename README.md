@@ -79,3 +79,16 @@ Configurar en **Settings → Secrets and variables → Actions → Secrets** del
 La fila indicada por `E2E_TASK_NAME` debe ser una fila de prueba dedicada. La prueba verifica los encabezados `E=TareaId`, `F=Nombre`, `L=Frecuencia` y `M=UnidadTiempo`, guarda el estado original de `L:M`, ejecuta el comando `Cambia la tarea <E2E_TASK_NAME> a mensual`, comprueba `L=1` y `M=Mes`, verifica que `A:O` no cambió fuera de esas dos columnas y finalmente restaura los valores originales.
 
 La cuenta de servicio debe tener acceso directo al spreadsheet. No se copia la credencial al repositorio y el workflow nunca imprime su contenido.
+
+
+## Feedback táctil del editor
+
+El teclado virtual del panel aplica una ventana de debounce estable de **80 ms** para evitar pulsaciones duplicadas por rebote del GT911. La tecla aceptada queda resaltada durante **120 ms** y puede emitir un clic corto mediante I2S.
+
+Los tiempos y el audio de teclas son configurables sin tocar la lógica del editor:
+
+- `PANEL_TOUCH_DEBOUNCE_MS_VALUE`: debounce, por defecto `80` ms.
+- `PANEL_KEY_HIGHLIGHT_MS_VALUE`: highlight, por defecto `120` ms.
+- `PANEL_KEY_AUDIO_ENABLED_VALUE`: feedback sonoro de teclas, por defecto habilitado cuando el audio del panel está disponible.
+
+GitHub Actions ejecuta `tests/test_touch_feedback_native.cpp` con C++ nativo para comprobar rebote, pulsación sostenida, liberación/rearme, movimiento del dedo y rollover de `millis()`. La validación física de sensibilidad táctil, legibilidad del highlight y audio requiere el panel 480x480 conectado.
