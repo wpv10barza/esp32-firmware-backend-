@@ -299,7 +299,7 @@ wait_for_serial /tmp/esp32-e2e-error.log 'GET command status -> 200 status=faile
   exit 1
 }
 
-wait_for_serial /tmp/esp32-e2e-error.log 'PANEL STATE -> ERROR | CI induced poll failure' 10 || {
+wait_for_serial /tmp/esp32-e2e-error.log 'PANEL STATE -> ERROR | POLL: CI induced poll failure' 10 || {
   echo "PHYSICAL E2E: FAIL missing physical polling failed -> ERROR transition" >&2
   cat /tmp/esp32-e2e-error.log
   exit 1
