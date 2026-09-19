@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_physical_e2e:
+        description: "Run USB-connected ESP32 physical E2E on a self-hosted panel runner"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -137,6 +143,8 @@ jobs:
           .ci/bin/command_text_viewport_test
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/virtual_keyboard_hit_test.cpp -o .ci/bin/virtual_keyboard_hit_test
           .ci/bin/virtual_keyboard_hit_test
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/panel_state_machine_test.cpp -o .ci/bin/panel_state_machine_test
+          .ci/bin/panel_state_machine_test
           python test/command_buffer_regression.py
 
       - name: Compile ESP32-S3-4848S040
@@ -158,6 +166,46 @@ jobs:
           name: esp32-s3-4848s040-firmware
           path: dist/
           if-no-files-found: error
+
+  physical-e2e-panel:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_physical_e2e }}
+    runs-on: [self-hosted, linux, panel-4848s040]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require runner-side hardware configuration
+        run: |
+          test -f include/local_config.h
+          command -v pio
+          command -v curl
+
+      - name: Run USB/device/backend E2E
+        env:
+          ESP32_SERIAL_PORT: ${{ vars.ESP32_SERIAL_PORT }}
+        run: |
+          chmod +x scripts/physical-e2e.sh
+          scripts/physical-e2e.sh "${ESP32_SERIAL_PORT:-}" esp32-physical-e2e.log
+
+      - name: Upload physical serial evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-physical-e2e-${{ github.run_id }}
+          path: esp32-physical-e2e.log
+          if-no-files-found: warn
+
+      - name: Publish hardware evidence scope
+        if: ${{ always() }}
+        run: |
+          {
+            echo '## Physical ESP32 E2E evidence'
+            echo
+            echo '- Real USB-connected ESP32-S3-4848S040 required'
+            echo '- Verifies flash, boot, ST7701 init, Wi-Fi and backend health'
+            echo '- Native CI separately executes the panel error-state model'
+            echo '- Optical legibility and touch response require the physical panel'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   site:
     needs: firmware
