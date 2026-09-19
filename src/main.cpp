@@ -1,6 +1,7 @@
 #if defined(BOARD_PANEL_4848S040)
 
 #include <Arduino.h>
+#include <U8g2lib.h>
 #include <Arduino_GFX_Library.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
@@ -11,6 +12,7 @@
 #include <esp_system.h>
 
 #include "app_config.h"
+#include "panel_theme.h"
 #include "command_buffer.h"
 #include "command_text_viewport.h"
 #include "virtual_keyboard.h"
@@ -92,137 +94,183 @@ const char* stateLabel(PanelState state) {
   return "3C";
 }
 
-uint16_t stateBackground(PanelState state) {
+uint16_t stateAccent(PanelState state) {
   switch (state) {
-    case PanelState::Ready: return color565(5, 45, 27);
-    case PanelState::Busy: return color565(8, 28, 58);
-    case PanelState::Pending: return color565(68, 43, 2);
-    case PanelState::Applied: return color565(2, 65, 28);
-    case PanelState::Rejected: return color565(62, 29, 3);
-    case PanelState::Error: return color565(65, 5, 9);
-    case PanelState::Offline: return color565(18, 22, 30);
-    case PanelState::Booting: return color565(10, 18, 38);
+    case PanelState::Ready: return color565(panel_theme::mint.r, panel_theme::mint.g, panel_theme::mint.b);
+    case PanelState::Busy: return color565(panel_theme::blue.r, panel_theme::blue.g, panel_theme::blue.b);
+    case PanelState::Pending: return color565(panel_theme::amber.r, panel_theme::amber.g, panel_theme::amber.b);
+    case PanelState::Applied: return color565(panel_theme::green.r, panel_theme::green.g, panel_theme::green.b);
+    case PanelState::Rejected: return color565(panel_theme::orange.r, panel_theme::orange.g, panel_theme::orange.b);
+    case PanelState::Error: return color565(panel_theme::red.r, panel_theme::red.g, panel_theme::red.b);
+    case PanelState::Offline: return color565(panel_theme::steelBlue.r, panel_theme::steelBlue.g, panel_theme::steelBlue.b);
+    case PanelState::Booting: return color565(panel_theme::blue.r, panel_theme::blue.g, panel_theme::blue.b);
   }
-  return 0;
+  return color565(panel_theme::mistyBlue.r, panel_theme::mistyBlue.g, panel_theme::mistyBlue.b);
 }
 
-void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
-  if (!displayReady) return;
-  int16_t x1 = 0;
-  int16_t y1 = 0;
-  uint16_t width = 0;
-  uint16_t height = 0;
-  display->setTextSize(size);
-  display->getTextBounds(text, 0, y, &x1, &y1, &width, &height);
-  int x = (kScreenWidth - static_cast<int>(width)) / 2;
-  if (x < 4) x = 4;
-  display->setTextColor(color);
-  display->setCursor(x, y);
-  display->print(text);
+uint16_t themeColor(const panel_theme::Rgb& color) {
+  return color565(color.r, color.g, color.b);
 }
 
-void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
+void useEditorFont() {
+  display->setFont(u8g2_font_helvR18_tf);
+  display->setTextSize(1);
+}
+
+void drawTextInRect(const String& text, int x, int y, int width, int height,
+                    const uint8_t* font, uint16_t color) {
   if (!displayReady) return;
-  display->fillRoundRect(x, y, width, height, 16, fill);
-  display->drawRoundRect(x, y, width, height, 16, color565(185, 210, 230));
-  display->setTextSize(2);
+  display->setFont(font);
+  display->setTextSize(1);
   int16_t x1 = 0;
   int16_t y1 = 0;
   uint16_t textWidth = 0;
   uint16_t textHeight = 0;
-  display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
-  display->setTextColor(WHITE);
-  display->setCursor(x + (width - textWidth) / 2, y + (height - textHeight) / 2);
-  display->print(label);
+  display->getTextBounds(text, x, y, &x1, &y1, &textWidth, &textHeight);
+  const int cursorX = x + (width - static_cast<int>(textWidth)) / 2 - x1;
+  const int cursorY = y + (height - static_cast<int>(textHeight)) / 2 - y1;
+  display->setTextColor(color);
+  display->setCursor(cursorX, cursorY);
+  display->print(text);
+}
+
+void drawCentered(const String& text, int y, const uint8_t* font, uint16_t color) {
+  drawTextInRect(text, 0, y, kScreenWidth, 28, font, color);
+}
+
+void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
+  if (!displayReady) return;
+  display->fillRoundRect(x, y, width, height, panel_theme::buttonRadius, fill);
+  display->drawRoundRect(x, y, width, height, panel_theme::buttonRadius,
+                         themeColor(panel_theme::mistyBlue));
+  drawTextInRect(label, x, y, width, height, u8g2_font_helvB14_tf,
+                 themeColor(panel_theme::primaryWhite));
 }
 
 void drawEditor() {
   if (!displayReady) return;
-  display->fillScreen(color565(8, 18, 30));
-  drawCentered("EDITAR ORDEN 3C", 10, 2, color565(170, 220, 255));
-  display->drawRect(8, 42, 464, 72, color565(185, 210, 230));
-  display->setTextSize(2);
-  display->setTextColor(WHITE);
+  display->fillScreen(themeColor(panel_theme::pageBackground));
+  drawCentered("EDITAR ORDEN 3C", 10, u8g2_font_helvB18_tf,
+               themeColor(panel_theme::mistyBlue));
+  display->fillRoundRect(panel_theme::editorFieldX, panel_theme::editorFieldY,
+                         panel_theme::editorFieldWidth, panel_theme::editorFieldHeight,
+                         panel_theme::editorFieldRadius, themeColor(panel_theme::surface));
+  display->drawRoundRect(panel_theme::editorFieldX, panel_theme::editorFieldY,
+                         panel_theme::editorFieldWidth, panel_theme::editorFieldHeight,
+                         panel_theme::editorFieldRadius, themeColor(panel_theme::mistyBlue));
+  useEditorFont();
+  display->setTextColor(themeColor(panel_theme::primaryWhite));
 
   uint16_t prefixWidths[kCommandCapacity + 1] = {};
   String full(commandBuffer.c_str());
   for (size_t i = 0; i < full.length() && i < kCommandCapacity; ++i) {
-    int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
+    int16_t x1 = 0, y1 = 0;
+    uint16_t w = 0, h = 0;
     display->getTextBounds(full.substring(0, i + 1), 0, 0, &x1, &y1, &w, &h);
     prefixWidths[i + 1] = w;
   }
   const auto window = command_text_viewport::compute(
       prefixWidths, commandBuffer.length(), commandBuffer.cursor(), 450, 3);
   const String visible = full.substring(window.first, window.last);
-  display->setCursor(15, 68);
+  const int visibleTop = panel_theme::editorFieldY + 16;
+  const int inputX = panel_theme::editorFieldX + 10;
+  int16_t vx1 = 0, vy1 = 0;
+  uint16_t vw = 0, vh = 0;
+  display->getTextBounds(visible, inputX, visibleTop, &vx1, &vy1, &vw, &vh);
+  display->setCursor(inputX, visibleTop - vy1);
   display->print(visible);
-  const int cursorX = 15 + window.cursorX;
-  display->drawFastVLine(cursorX, 57, 28, color565(80, 220, 160));
+  const int cursorX = inputX + window.cursorX;
+  display->drawFastVLine(cursorX, visibleTop - 2, 28, themeColor(panel_theme::mint));
 
   virtual_keyboard::Key keys[50]{};
   const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
   for (size_t i = 0; i < count; ++i) {
     const auto& key = keys[i];
     const auto fill = key.definition.kind == virtual_keyboard::KeyKind::Enter
-        ? color565(18, 105, 73) : color565(25, 45, 65);
+        ? themeColor(panel_theme::green) : themeColor(panel_theme::surface);
     display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 7, fill);
+                           key.rect.bottom - key.rect.top, panel_theme::smallRadius, fill);
     display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 7, color565(130, 160, 180));
-    display->setTextSize(key.definition.label[0] && strlen(key.definition.label) > 2 ? 1 : 2);
-    int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
-    display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
-    display->setTextColor(WHITE);
-    display->setCursor(key.rect.left + ((key.rect.right-key.rect.left)-w)/2,
-                       key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
-    display->print(key.definition.label);
+                           key.rect.bottom - key.rect.top, panel_theme::smallRadius,
+                           themeColor(panel_theme::steelBlue));
+    drawTextInRect(key.definition.label,
+                   key.rect.left, key.rect.top,
+                   key.rect.right - key.rect.left,
+                   key.rect.bottom - key.rect.top,
+                   u8g2_font_helvB14_tf, themeColor(panel_theme::primaryWhite));
   }
-  drawButton(8, 172, 100, 36, "CANCELAR", color565(80, 35, 35));
-  drawButton(112, 172, 72, 36, "<", color565(42, 67, 90));
-  drawButton(192, 172, 72, 36, "DEL", color565(105, 72, 40));
+  drawButton(8, 172, 100, 36, "CANCELAR", themeColor(panel_theme::surface));
+  drawButton(112, 172, 72, 36, "<", themeColor(panel_theme::steelBlue));
+  drawButton(192, 172, 72, 36, "DEL", themeColor(panel_theme::orange));
   drawButton(272, 172, 115, 36,
              keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC",
-             color565(45, 70, 100));
+             themeColor(panel_theme::steelBlue));
 }
   
 void drawPanel() {
-  if (commandEditorOpen) { drawEditor(); return; }
+  if (commandEditorOpen) {
+    drawEditor();
+    return;
+  }
   if (!displayReady) return;
-  const uint16_t background = stateBackground(panelState);
-  const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
+
+  const uint16_t background = themeColor(panel_theme::pageBackground);
+  const uint16_t accent = stateAccent(panelState);
+  uint16_t eye = themeColor(panel_theme::primaryWhite);
+  if (panelState == PanelState::Offline) eye = themeColor(panel_theme::steelBlue);
+  if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
+    eye = accent;
+  }
+
   display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
+  drawCentered("Interfaz Portátil", 12, u8g2_font_helvB18_tf,
+               themeColor(panel_theme::mistyBlue));
+
+  display->fillRoundRect(panel_theme::cardX, panel_theme::cardY,
+                         panel_theme::cardWidth, panel_theme::cardHeight,
+                         panel_theme::cardRadius, themeColor(panel_theme::surface));
+  display->fillRoundRect(panel_theme::cardX + 20, panel_theme::cardY + 18,
+                         panel_theme::cardWidth - 40, 6, 3, accent);
 
   if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
-    display->drawLine(112, 105, 172, 165, eye);
-    display->drawLine(172, 105, 112, 165, eye);
-    display->drawLine(308, 105, 368, 165, eye);
-    display->drawLine(368, 105, 308, 165, eye);
+    display->drawLine(118, 118, 178, 178, eye);
+    display->drawLine(178, 118, 118, 178, eye);
+    display->drawLine(302, 118, 362, 178, eye);
+    display->drawLine(362, 118, 302, 178, eye);
   } else if (panelState == PanelState::Applied) {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
-    display->drawLine(205, 205, 225, 218, eye);
-    display->drawLine(225, 218, 255, 218, eye);
-    display->drawLine(255, 218, 275, 205, eye);
+    display->fillRoundRect(110, 115, 70, 70, 20, eye);
+    display->fillRoundRect(300, 115, 70, 70, 20, eye);
+    display->fillCircle(145, 150, 12, themeColor(panel_theme::surface));
+    display->fillCircle(335, 150, 12, themeColor(panel_theme::surface));
+    display->drawLine(205, 198, 225, 212, eye);
+    display->drawLine(225, 212, 255, 212, eye);
+    display->drawLine(255, 212, 275, 198, eye);
   } else {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
+    display->fillRoundRect(110, 115, 70, 70, 20, eye);
+    display->fillRoundRect(300, 115, 70, 70, 20, eye);
+    display->fillCircle(145, 150, 12, themeColor(panel_theme::surface));
+    display->fillCircle(335, 150, 12, themeColor(panel_theme::surface));
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
+  drawCentered(stateLabel(panelState), 198, u8g2_font_helvB24_tf,
+               themeColor(panel_theme::primaryWhite));
+
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
+  drawCentered(detail, 242, u8g2_font_helvR14_tf,
+               themeColor(panel_theme::mistyBlue));
   if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
+    drawCentered(WiFi.localIP().toString(), 270, u8g2_font_helvR14_tf,
+                 themeColor(panel_theme::steelBlue));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(panel_theme::cardX, panel_theme::actionY,
+             panel_theme::actionWidth, panel_theme::actionHeight,
+             "PROBAR WSL", themeColor(panel_theme::steelBlue));
+  drawButton(panel_theme::cardX + panel_theme::actionWidth + panel_theme::actionGap,
+             panel_theme::actionY, panel_theme::actionWidth,
+             panel_theme::actionHeight, "ENVIAR 3C",
+             themeColor(panel_theme::green));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -353,6 +401,9 @@ bool initializeDisplay() {
     return false;
   }
   Serial.println("DISPLAY: display->begin() OK");
+  display->setUTF8Print(true);
+  display->setFont(u8g2_font_helvB18_tf);
+  display->setTextSize(1);
   pinMode(pins::backlight, OUTPUT);
   analogWrite(pins::backlight, app_config::panelBrightness);
   Serial.printf("DISPLAY: backlight GPIO %d PWM=%u\n", pins::backlight, app_config::panelBrightness);
@@ -666,7 +717,7 @@ void handleTouch() {
         // Tap in the text field: place cursor approximately at the tapped character.
         String text(commandBuffer.c_str());
         if (text.length()) {
-          display->setTextSize(2);
+          useEditorFont();
           size_t best = 0;
           uint16_t bestDistance = UINT16_MAX;
           for (size_t i = 0; i <= text.length() && i <= kCommandCapacity; ++i) {
