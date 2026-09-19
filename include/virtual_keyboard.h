@@ -74,6 +74,13 @@ struct Key {
   KeyRect rect;
 };
 
+// Hit-testing primitive for one rendered virtual-key frame.
+// The frame is half-open on the right/bottom edges so adjacent frames can never
+// claim the same boundary pixel.
+constexpr bool hitTestFrame(const KeyRect& frame, int x, int y) {
+  return frame.contains(x, y);
+}
+
 struct Row {
   const KeyDefinition* definitions;
   size_t count;
@@ -262,7 +269,7 @@ inline int hitTestIndex(KeyboardMode mode, int x, int y) {
   std::array<Key, 50> keys{};
   const size_t count = buildKeys(mode, keys.data(), keys.size());
   for (size_t index = 0; index < count; ++index) {
-    if (keys[index].rect.contains(x, y)) return static_cast<int>(index);
+    if (hitTestFrame(keys[index].rect, x, y)) return static_cast<int>(index);
   }
   return -1;
 }
