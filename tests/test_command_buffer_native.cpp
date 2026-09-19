@@ -13,24 +13,37 @@ static void test_arbitrary_cursor_edit_integrity() {
   assert(std::strcmp(buffer.c_str(), "01234AB56789") == 0);
   assert(buffer.cursor() == 7 && buffer.invariantHolds());
 
+  // moveLeft positions the cursor between A and B; deleteForward removes B.
   buffer.moveLeft();
   assert(buffer.deleteForward());
-  assert(std::strcmp(buffer.c_str(), "012345B56789") == 0);
+  assert(std::strcmp(buffer.c_str(), "01234A56789") == 0);
   assert(buffer.cursor() == 6 && buffer.invariantHolds());
 
+  // Backspace at the same cursor removes A and restores the original string.
+  assert(buffer.backspace());
+  assert(std::strcmp(buffer.c_str(), "0123456789") == 0);
+  assert(buffer.cursor() == 5 && buffer.invariantHolds());
+
+  // Insert again at the middle and verify the cursor advances with the edit.
+  assert(buffer.insert('X'));
+  assert(std::strcmp(buffer.c_str(), "01234X56789") == 0);
+  assert(buffer.cursor() == 6 && buffer.invariantHolds());
+
+  // Backspace at an arbitrary early cursor must not corrupt the suffix.
   buffer.setCursor(1);
-  assert(buffer.backspace() == true);
-  assert(std::strcmp(buffer.c_str(), "12345B56789") == 0);
+  assert(buffer.backspace());
+  assert(std::strcmp(buffer.c_str(), "1234X56789") == 0);
   assert(buffer.cursor() == 0 && buffer.invariantHolds());
 
-  assert(buffer.insert('X'));
-  assert(std::strcmp(buffer.c_str(), "X12345B56789") == 0);
+  // The same cursor remains a valid insertion point after deletion.
+  assert(buffer.insert('Y'));
+  assert(std::strcmp(buffer.c_str(), "Y1234X56789") == 0);
   assert(buffer.cursor() == 1 && buffer.invariantHolds());
 
   buffer.moveEnd();
   assert(buffer.backspace());
-  assert(std::strcmp(buffer.c_str(), "X12345B5678") == 0);
-  assert(buffer.cursor() == 11 && buffer.invariantHolds());
+  assert(std::strcmp(buffer.c_str(), "Y1234X5678") == 0);
+  assert(buffer.cursor() == 11 - 1 && buffer.invariantHolds());
 }
 
 int main() {
