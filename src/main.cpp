@@ -194,7 +194,6 @@ void drawEditor() {
   const String visible = full.substring(window.first, window.last);
   const int visibleTop = panel_theme::editorFieldY + 16;
   const int inputX = panel_theme::editorFieldX + 10;
-  display->getTextBounds(visible, inputX, visibleTop, nullptr, nullptr, nullptr, nullptr);
   int16_t vx1 = 0, vy1 = 0;
   uint16_t vw = 0, vh = 0;
   display->getTextBounds(visible, inputX, visibleTop, &vx1, &vy1, &vw, &vh);
