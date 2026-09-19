@@ -134,6 +134,8 @@ jobs:
           .ci/bin/command_text_viewport_test
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/virtual_keyboard_hit_test.cpp -o .ci/bin/virtual_keyboard_hit_test
           .ci/bin/virtual_keyboard_hit_test
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude tests/test_ui_style.cpp -o .ci/bin/ui_style_test
+          .ci/bin/ui_style_test
           python test/command_buffer_regression.py
 
       - name: Compile ESP32-S3-4848S040
