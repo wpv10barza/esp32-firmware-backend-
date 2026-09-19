@@ -616,7 +616,7 @@ void configureWebServer() {
   web.on("/api/diagnostics", HTTP_GET, [] {
     const unsigned int freePsram = static_cast<unsigned int>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     const String body = String("{\"board\":\"ESP32-4848S040\",\"uptime_ms\":") + millis() +
-      ",\"reset_reason":" + static_cast<int>(esp_reset_reason()) +
+      ",\"reset_reason\":" + static_cast<int>(esp_reset_reason()) +
       ",\"psram\":" + (psramFound() ? "true" : "false") +
       ",\"psram_size\":" + ESP.getPsramSize() +
       ",\"psram_free\":" + freePsram +
