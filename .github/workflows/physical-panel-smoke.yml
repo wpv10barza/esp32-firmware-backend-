@@ -1,0 +1,81 @@
+name: Physical panel smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_id:
+        description: "GitHub Actions artifact ID to flash"
+        required: true
+        default: "10377040660"
+      serial_port:
+        description: "USB serial port, e.g. /dev/ttyACM0"
+        required: true
+      require_wifi:
+        description: "Require Wi-Fi association; use only with a network-configured build"
+        required: true
+        default: false
+        type: boolean
+      allow_audio_disabled:
+        description: "Allow audio disabled on relay variants"
+        required: true
+        default: false
+        type: boolean
+      stability_seconds:
+        description: "No-reboot observation window"
+        required: true
+        default: "60"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  physical-panel:
+    runs-on: [self-hosted, esp32-panel]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          python3 -m venv .ci/venv
+          .ci/venv/bin/pip install --upgrade pip
+          .ci/venv/bin/pip install esptool pyserial
+
+      - name: Download requested firmware artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ inputs.artifact_id }}
+        run: |
+          mkdir -p .ci
+          curl -fsSL             -H "Authorization: Bearer ${GH_TOKEN}"             -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"             -o ".ci/artifact-${ARTIFACT_ID}.zip"
+          unzip -q ".ci/artifact-${ARTIFACT_ID}.zip" -d .ci/panel-artifact
+
+      - name: Verify image hashes
+        run: |
+          cd .ci/panel-artifact
+          sha256sum -c SHA256SUMS.txt
+
+      - name: Flash and verify physical boot
+        env:
+          PORT: ${{ inputs.serial_port }}
+        run: |
+          ARGS=(
+            --port "$PORT"
+            --artifact ".ci/artifact-${{ inputs.artifact_id }}.zip"
+            --stability-seconds "${{ inputs.stability_seconds }}"
+          )
+          if [ "${{ inputs.require_wifi }}" = "true" ]; then ARGS+=(--require-wifi); fi
+          if [ "${{ inputs.allow_audio_disabled }}" = "true" ]; then ARGS+=(--allow-audio-disabled); fi
+          .ci/venv/bin/python scripts/panel_boot_smoke.py "${ARGS[@]}"
+
+      - name: Upload physical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physical-panel-evidence-${{ github.run_id }}
+          path: |
+            .ci/artifact-*.zip
+            .ci/panel-artifact/SHA256SUMS.txt
+            .ci/panel-artifact/manifest.json
+          if-no-files-found: warn
