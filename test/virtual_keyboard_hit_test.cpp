@@ -69,10 +69,36 @@ void assertVerticalBoundaryIsExclusive(KeyboardMode mode) {
   assert(virtual_keyboard::hitTestIndex(mode, x, row1.rect.top) == 10);
 }
 
+void assertEveryFrameUsesExclusiveEdges(KeyboardMode mode) {
+  Key keys[50]{};
+  const size_t count = virtual_keyboard::buildKeys(mode, keys, 50);
+
+  for (size_t i = 0; i < count; ++i) {
+    const Key& key = keys[i];
+    const int centerX = (static_cast<int>(key.rect.left) + key.rect.right - 1) / 2;
+    const int centerY = (static_cast<int>(key.rect.top) + key.rect.bottom - 1) / 2;
+
+    // Inclusive left/top and exclusive right/bottom.
+    assert(virtual_keyboard::hitTestFrame(key.rect, key.rect.left, key.rect.top));
+    assert(virtual_keyboard::hitTestFrame(key.rect, key.rect.right - 1, key.rect.bottom - 1));
+    assert(!virtual_keyboard::hitTestFrame(key.rect, key.rect.right, centerY));
+    assert(!virtual_keyboard::hitTestFrame(key.rect, centerX, key.rect.bottom));
+
+    // The public index lookup must resolve the same frame uniquely.
+    assert(virtual_keyboard::hitTestIndex(mode, centerX, centerY) == static_cast<int>(i));
+
+    // The physical layout keeps gaps between frames; a touch in a gap is ignored.
+    assert(virtual_keyboard::hitTestIndex(mode, key.rect.right, centerY) == -1);
+    assert(virtual_keyboard::hitTestIndex(mode, centerX, key.rect.bottom) == -1);
+  }
+}
+
 void assertOutsideKeyboardIsRejected(KeyboardMode mode) {
   assert(virtual_keyboard::hitTestIndex(mode, -1, -1) == -1);
   assert(virtual_keyboard::hitTestIndex(mode, virtual_keyboard::kScreenWidth, 300) == -1);
   assert(virtual_keyboard::hitTestIndex(mode, 100, virtual_keyboard::kScreenHeight) == -1);
+  assert(virtual_keyboard::hitTestIndex(mode, 479, 479) == -1);
+  assert(virtual_keyboard::hitTestIndex(mode, 0, 215) == -1);
   assert(!virtual_keyboard::hitTest(mode, -1, 300));
 
   Key matched{};
@@ -123,6 +149,8 @@ int main() {
   assertHorizontalBoundaryIsExclusive(KeyboardMode::NumericSymbols);
   assertVerticalBoundaryIsExclusive(KeyboardMode::Alpha);
   assertVerticalBoundaryIsExclusive(KeyboardMode::NumericSymbols);
+  assertEveryFrameUsesExclusiveEdges(KeyboardMode::Alpha);
+  assertEveryFrameUsesExclusiveEdges(KeyboardMode::NumericSymbols);
 
   assertOutsideKeyboardIsRejected(KeyboardMode::Alpha);
   assertOutsideKeyboardIsRejected(KeyboardMode::NumericSymbols);
