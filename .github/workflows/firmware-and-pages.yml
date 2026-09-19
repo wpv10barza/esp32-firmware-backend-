@@ -179,6 +179,8 @@ jobs:
           test -f include/local_config.h
           command -v pio
           command -v curl
+          command -v python3
+          command -v ip
 
       - name: Run USB/device/backend E2E
         env:
