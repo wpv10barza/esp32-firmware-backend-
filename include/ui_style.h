@@ -12,9 +12,9 @@ constexpr uint16_t rgb565(uint8_t red, uint8_t green, uint8_t blue) {
 }
 
 // Ported visual tokens from alaltitov/Guition-ESP32-S3-4848S040.
-// Source palette: slate blue-gray, steel blue, misty blue, warm white and sky blue.
-constexpr uint16_t kBackground = rgb565(0x34, 0x36, 0x45);      // #343645
-constexpr uint16_t kSurface = rgb565(0x60, 0x66, 0x82);          // #606682
+// Source palette: black page background, slate blue-gray surface, steel blue, misty blue, warm white and sky blue.
+constexpr uint16_t kBackground = rgb565(0x0D, 0x0D, 0x0D);      // #0D0D0D
+constexpr uint16_t kSurface = rgb565(0x34, 0x36, 0x45);          // #343645
 constexpr uint16_t kSecondaryText = rgb565(0x9B, 0xA2, 0xBC);    // #9BA2BC
 constexpr uint16_t kPrimaryText = rgb565(0xF2, 0xF0, 0xEB);      // #F2F0EB
 constexpr uint16_t kAccent = rgb565(0x3F, 0xA7, 0xF3);           // #3FA7F3
