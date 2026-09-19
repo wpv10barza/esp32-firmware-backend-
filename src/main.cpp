@@ -9,6 +9,7 @@
 #include <Wire.h>
 #include <driver/i2s.h>
 #include <esp_system.h>
+#include <esp_heap_caps.h>
 
 #include "app_config.h"
 #include "command_buffer.h"
@@ -70,10 +71,12 @@ unsigned long lastHealthCheck = 0;
 unsigned long lastCommandPoll = 0;
 bool backendAvailable = false;
 bool displayReady = false;
+bool touchReady = false;
 bool audioReady = false;
 bool mdnsReady = false;
 bool wifiAnnounced = false;
 bool touchDown = false;
+unsigned long lastStabilityLog = 0;
 constexpr size_t kCommandCapacity = 240;
 CommandBuffer<kCommandCapacity> commandBuffer;
 virtual_keyboard::KeyboardMode keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
@@ -399,6 +402,7 @@ bool initializeDisplay() {
   Serial.printf("DISPLAY: backlight GPIO %d PWM=%u\n", pins::backlight, app_config::panelBrightness);
   display->displayOn();
   Serial.println("DISPLAY: displayOn() OK");
+  Serial.println("BOOT: ST7701 OK");
   runDisplayDiagnostic();
   return true;
 }
@@ -419,6 +423,17 @@ bool i2cWriteByte(uint16_t reg, uint8_t value) {
   Wire.write(static_cast<uint8_t>(reg & 0xFF));
   Wire.write(value);
   return Wire.endTransmission() == 0;
+}
+
+bool probeTouchController() {
+  uint8_t productId[4] = {};
+  if (!i2cRead(0x8140, productId, sizeof(productId))) {
+    Serial.println("BOOT: GT911 FAIL");
+    return false;
+  }
+  Serial.printf("BOOT: GT911 OK ID=%02X%02X%02X%02X\n",
+                productId[0], productId[1], productId[2], productId[3]);
+  return true;
 }
 
 TouchSample readTouch() {
@@ -598,6 +613,22 @@ const char controlPage[] PROGMEM = R"HTML(
 
 void configureWebServer() {
   web.on("/", HTTP_GET, [] { web.send_P(200, "text/html; charset=utf-8", controlPage); });
+  web.on("/api/diagnostics", HTTP_GET, [] {
+    const int freePsram = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    const String body = String("{\"board\":\"ESP32-4848S040\",\"uptime_ms\":") + millis() +
+      ",\"reset_reason":" + static_cast<int>(esp_reset_reason()) +
+      ",\"psram\":" + (psramFound() ? "true" : "false") +
+      ",\"psram_size\":" + ESP.getPsramSize() +
+      ",\"psram_free\":" + freePsram +
+      ",\"free_heap\":" + ESP.getFreeHeap() +
+      ",\"display\":" + (displayReady ? "true" : "false") +
+      ",\"gt911\":" + (touchReady ? "true" : "false") +
+      ",\"audio\":" + (audioReady ? "true" : "false") +
+      ",\"wifi\":" + (WiFi.status() == WL_CONNECTED ? "true" : "false") +
+      ",\"backend\":" + (backendAvailable ? "true" : "false") +
+      ",\"last_command_id_present\":" + (lastCommandId.length() ? "true" : "false") + "}";
+    web.send(200, "application/json", body);
+  });
   web.on("/health", HTTP_GET, [] {
     const String body = String("{\"ok\":true,\"board\":\"ESP32-4848S040\",\"wifi\":") +
       (WiFi.status() == WL_CONNECTED ? "true" : "false") +
@@ -643,6 +674,7 @@ void connectWifi() {
   if (!strlen(app_config::wifiSsid)) {
     updatePanel(PanelState::Offline, "Configure local_config.h");
     Serial.println("Configure include/local_config.h antes de usar Wi-Fi.");
+    Serial.println("BOOT: WIFI NOT CONFIGURED");
     return;
   }
   configureWifi();
@@ -734,18 +766,31 @@ void handleTouch() {
 void setup() {
   Serial.begin(115200);
   delay(250);
+  Serial.println("BOOT: SERIAL OK");
+  Serial.printf("BOOT: RESET_REASON=%d\n", static_cast<int>(esp_reset_reason()));
   Serial.printf("ESP32-4848S040 3C | PSRAM: %s | %u bytes\n",
     psramFound() ? "OK" : "NO", ESP.getPsramSize());
+  if (psramFound()) Serial.printf("BOOT: PSRAM OK size=%u free=%d\n", ESP.getPsramSize(), heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+  else Serial.println("BOOT: PSRAM FAIL");
 
   displayReady = initializeDisplay();
   if (!displayReady) Serial.println("No se pudo inicializar la pantalla ST7701.");
   Wire.begin(pins::touchSda, pins::touchScl, 400000);
+  touchReady = probeTouchController();
   audioReady = initializeAudio();
+  if (audioReady) Serial.println("BOOT: AUDIO OK");
+  else if (app_config::panelAudioEnabled) Serial.println("BOOT: AUDIO FAIL");
+  else Serial.println("BOOT: AUDIO DISABLED");
   commandBuffer.set(app_config::commandBuffer.c_str());
   updatePanel(PanelState::Booting, "Hardware inicializado");
   playTone(520, 60);
   connectWifi();
   configureWebServer();
+  Serial.println("BOOT: HTTP READY port=80");
+  Serial.printf("BOOT: GPIO MAP OK backlight=%d lcd_cs=%d lcd_clk=%d lcd_mosi=%d touch_sda=%d touch_scl=%d audio=%d/%d/%d\n",
+    pins::backlight, pins::lcdCs, pins::lcdClock, pins::lcdMosi,
+    pins::touchSda, pins::touchScl, pins::audioBclk, pins::audioLrclk, pins::audioData);
+  Serial.println("BOOT: READY");
 }
 
 void loop() {
@@ -757,6 +802,7 @@ void loop() {
       wifiAnnounced = true;
       Serial.printf("Wi-Fi listo: http://%s/ gateway=%s rssi=%d\n",
         WiFi.localIP().toString().c_str(), WiFi.gatewayIP().toString().c_str(), WiFi.RSSI());
+      Serial.printf("BOOT: WIFI OK ip=%s rssi=%d\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
       if (!mdnsReady) {
         mdnsReady = MDNS.begin("esp32-panel-3c");
         if (mdnsReady) MDNS.addService("http", "tcp", 80);
@@ -781,6 +827,13 @@ void loop() {
       WiFi.reconnect();
       updatePanel(PanelState::Busy, "Reconectando Wi-Fi");
     }
+  }
+
+  if (millis() - lastStabilityLog >= 30000UL) {
+    lastStabilityLog = millis();
+    Serial.printf("STABILITY: uptime_ms=%lu free_heap=%u psram_free=%d wifi=%d reset_reason=%d\n",
+      millis(), ESP.getFreeHeap(), heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+      static_cast<int>(WiFi.status()), static_cast<int>(esp_reset_reason()));
   }
   delay(5);
 }
