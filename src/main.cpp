@@ -14,6 +14,7 @@
 #include "app_config.h"
 #include "panel_theme.h"
 #include "command_buffer.h"
+#include "command_source.h"
 #include "command_text_viewport.h"
 #include "virtual_keyboard.h"
 
@@ -518,8 +519,8 @@ bool checkBackendHealth() {
   return backendAvailable;
 }
 
-int send3CCommand(const String& rawCommand) {
-  String command = rawCommand;
+int send3CCommand() {
+  String command = command_source::for3C(commandBuffer);
   command.trim();
   if (!command.length()) {
     updatePanel(PanelState::Error, "Comando vacio", true);
@@ -620,8 +621,13 @@ void configureWebServer() {
     web.send(checkBackendHealth() ? 200 : 502, "application/json", lastBackendMessage);
   });
   web.on("/api/3c", HTTP_POST, [] {
-    app_config::commandBuffer = web.arg("text");
-    const int code = send3CCommand(app_config::commandBuffer);
+    const String requestedCommand = web.arg("text");
+    if (!commandBuffer.set(requestedCommand.c_str())) {
+      updatePanel(PanelState::Error, "Comando excede 240 caracteres", true);
+      web.send(413, "application/json", "{\"error\":\"command too long\"}");
+      return;
+    }
+    const int code = send3CCommand();
     web.send(code == 200 || code == 202 ? 202 : 502, "application/json", lastBackendMessage);
   });
   web.onNotFound([] { web.send(404, "application/json", "{\"error\":\"not found\"}"); });
@@ -683,10 +689,9 @@ void handleTouch() {
               commandBuffer.insert(' ');
               break;
             case KeyKind::Enter:
-              app_config::commandBuffer = commandBuffer.c_str();
               commandEditorOpen = false;
               drawPanel();
-              send3CCommand(app_config::commandBuffer);
+              send3CCommand();
               touchDown = sample.touched;
               return;
             case KeyKind::ToggleAlphaNumeric:
