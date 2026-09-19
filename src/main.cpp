@@ -14,6 +14,7 @@
 #include "command_buffer.h"
 #include "command_text_viewport.h"
 #include "virtual_keyboard.h"
+#include "ui_style.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -92,18 +93,18 @@ const char* stateLabel(PanelState state) {
   return "3C";
 }
 
-uint16_t stateBackground(PanelState state) {
+uint16_t stateAccent(PanelState state) {
   switch (state) {
-    case PanelState::Ready: return color565(5, 45, 27);
-    case PanelState::Busy: return color565(8, 28, 58);
-    case PanelState::Pending: return color565(68, 43, 2);
-    case PanelState::Applied: return color565(2, 65, 28);
-    case PanelState::Rejected: return color565(62, 29, 3);
-    case PanelState::Error: return color565(65, 5, 9);
-    case PanelState::Offline: return color565(18, 22, 30);
-    case PanelState::Booting: return color565(10, 18, 38);
+    case PanelState::Ready: return ui_style::kSuccess;
+    case PanelState::Busy: return ui_style::kAccent;
+    case PanelState::Pending: return ui_style::kWarning;
+    case PanelState::Applied: return ui_style::kSuccess;
+    case PanelState::Rejected:
+    case PanelState::Error: return ui_style::kDanger;
+    case PanelState::Offline:
+    case PanelState::Booting: return ui_style::kSurface;
   }
-  return 0;
+  return ui_style::kSurface;
 }
 
 void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
@@ -124,105 +125,193 @@ void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
 void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
   if (!displayReady) return;
   display->fillRoundRect(x, y, width, height, 16, fill);
-  display->drawRoundRect(x, y, width, height, 16, color565(185, 210, 230));
-  display->setTextSize(2);
-  int16_t x1 = 0;
-  int16_t y1 = 0;
-  uint16_t textWidth = 0;
-  uint16_t textHeight = 0;
+  display->drawRoundRect(x, y, width, height, 16, ui_style::kSecondaryText);
+
+  display->setTextSize(ui_style::kButtonTextSize);
+  int16_t x1 = 0, y1 = 0;
+  uint16_t textWidth = 0, textHeight = 0;
   display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
-  display->setTextColor(WHITE);
-  display->setCursor(x + (width - textWidth) / 2, y + (height - textHeight) / 2);
+  display->setTextColor(ui_style::kPrimaryText);
+  display->setCursor(
+      x + (width - static_cast<int>(textWidth)) / 2,
+      y + (height - static_cast<int>(textHeight)) / 2);
   display->print(label);
 }
 
-void drawEditor() {
+void clearScreenForMode() {
   if (!displayReady) return;
-  display->fillScreen(color565(8, 18, 30));
-  drawCentered("EDITAR ORDEN 3C", 10, 2, color565(170, 220, 255));
-  display->drawRect(8, 42, 464, 72, color565(185, 210, 230));
-  display->setTextSize(2);
-  display->setTextColor(WHITE);
+  display->fillScreen(ui_style::kBackground);
+}
+
+void clearEditorTextRegion() {
+  if (!displayReady) return;
+  display->fillRect(
+      ui_style::kFieldInnerX,
+      ui_style::kFieldInnerY,
+      ui_style::kFieldInnerWidth,
+      ui_style::kFieldInnerHeight,
+      ui_style::kSurface);
+}
+
+void drawEditorText() {
+  if (!displayReady) return;
+
+  clearEditorTextRegion();
+  display->setTextSize(ui_style::kCommandTextSize);
+  display->setTextWrap(false);
 
   uint16_t prefixWidths[kCommandCapacity + 1] = {};
   String full(commandBuffer.c_str());
   for (size_t i = 0; i < full.length() && i < kCommandCapacity; ++i) {
-    int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
+    int16_t x1 = 0, y1 = 0;
+    uint16_t w = 0, h = 0;
     display->getTextBounds(full.substring(0, i + 1), 0, 0, &x1, &y1, &w, &h);
     prefixWidths[i + 1] = w;
   }
+
   const auto window = command_text_viewport::compute(
-      prefixWidths, commandBuffer.length(), commandBuffer.cursor(), 450, 3);
+      prefixWidths, commandBuffer.length(), commandBuffer.cursor(), 445, 3);
   const String visible = full.substring(window.first, window.last);
-  display->setCursor(15, 68);
+
+  display->setTextColor(ui_style::kPrimaryText);
+  display->setCursor(16, 68);
   display->print(visible);
-  const int cursorX = 15 + window.cursorX;
-  display->drawFastVLine(cursorX, 57, 28, color565(80, 220, 160));
+
+  const int cursorX = 16 + window.cursorX;
+  display->drawFastVLine(
+      cursorX, ui_style::kCursorY, ui_style::kCursorHeight, ui_style::kAccent);
+}
+
+void drawEditorKeyboard() {
+  if (!displayReady) return;
+  display->fillRect(0, ui_style::kKeyboardY, kScreenWidth,
+                    kScreenHeight - ui_style::kKeyboardY, ui_style::kBackground);
 
   virtual_keyboard::Key keys[50]{};
   const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
   for (size_t i = 0; i < count; ++i) {
     const auto& key = keys[i];
-    const auto fill = key.definition.kind == virtual_keyboard::KeyKind::Enter
-        ? color565(18, 105, 73) : color565(25, 45, 65);
-    display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 7, fill);
-    display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 7, color565(130, 160, 180));
-    display->setTextSize(key.definition.label[0] && strlen(key.definition.label) > 2 ? 1 : 2);
-    int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
+    const int width = key.rect.right - key.rect.left;
+    const int height = key.rect.bottom - key.rect.top;
+
+    uint16_t fill = ui_style::kSurface;
+    if (key.definition.kind == virtual_keyboard::KeyKind::Enter) {
+      fill = ui_style::kSuccess;
+    } else if (key.definition.kind == virtual_keyboard::KeyKind::ToggleAlphaNumeric) {
+      fill = ui_style::kAccent;
+    }
+
+    display->fillRoundRect(key.rect.left, key.rect.top, width, height, 7, fill);
+    display->drawRoundRect(key.rect.left, key.rect.top, width, height, 7,
+                           ui_style::kSecondaryText);
+
+    const uint8_t size = strlen(key.definition.label) > 2
+        ? ui_style::kSmallKeyboardTextSize
+        : ui_style::kKeyboardTextSize;
+    display->setTextSize(size);
+
+    int16_t x1 = 0, y1 = 0;
+    uint16_t w = 0, h = 0;
     display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
-    display->setTextColor(WHITE);
-    display->setCursor(key.rect.left + ((key.rect.right-key.rect.left)-w)/2,
-                       key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
+    display->setTextColor(ui_style::kPrimaryText);
+    display->setCursor(
+        key.rect.left + (width - static_cast<int>(w)) / 2,
+        key.rect.top + (height - static_cast<int>(h)) / 2);
     display->print(key.definition.label);
   }
-  drawButton(8, 172, 100, 36, "CANCELAR", color565(80, 35, 35));
-  drawButton(112, 172, 72, 36, "<", color565(42, 67, 90));
-  drawButton(192, 172, 72, 36, "DEL", color565(105, 72, 40));
-  drawButton(272, 172, 115, 36,
-             keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC",
-             color565(45, 70, 100));
 }
-  
-void drawPanel() {
-  if (commandEditorOpen) { drawEditor(); return; }
+
+void drawEditorStatic() {
   if (!displayReady) return;
-  const uint16_t background = stateBackground(panelState);
-  const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
-  display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
+  clearScreenForMode();
+
+  drawCentered("EDITAR ORDEN 3C", 8, ui_style::kTitleTextSize, ui_style::kAccent);
+
+  display->fillRoundRect(ui_style::kFieldX, ui_style::kFieldY,
+                         ui_style::kFieldWidth, ui_style::kFieldHeight,
+                         12, ui_style::kSurface);
+  display->drawRoundRect(ui_style::kFieldX, ui_style::kFieldY,
+                         ui_style::kFieldWidth, ui_style::kFieldHeight,
+                         12, ui_style::kSecondaryText);
+
+  drawButton(8, ui_style::kEditorControlY, 100, ui_style::kEditorControlHeight,
+             "CANCELAR", ui_style::kSurface);
+  drawButton(112, ui_style::kEditorControlY, 72, ui_style::kEditorControlHeight,
+             "<", ui_style::kSurface);
+  drawButton(192, ui_style::kEditorControlY, 72, ui_style::kEditorControlHeight,
+             "DEL", ui_style::kWarning);
+  drawButton(272, ui_style::kEditorControlY, 115, ui_style::kEditorControlHeight,
+             keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC",
+             ui_style::kAccent);
+
+  drawEditorKeyboard();
+}
+
+void drawEditor() {
+  if (!displayReady) return;
+  drawEditorStatic();
+  drawEditorText();
+}
+
+void drawPanel() {
+  if (commandEditorOpen) {
+    drawEditor();
+    return;
+  }
+  if (!displayReady) return;
+
+  const uint16_t accent = stateAccent(panelState);
+  const uint16_t iconColor =
+      panelState == PanelState::Offline ? ui_style::kSecondaryText : ui_style::kPrimaryText;
+
+  display->fillScreen(ui_style::kBackground);
+  drawCentered("Interfaz Portatil", 14, ui_style::kTitleTextSize, ui_style::kPrimaryText);
 
   if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
-    display->drawLine(112, 105, 172, 165, eye);
-    display->drawLine(172, 105, 112, 165, eye);
-    display->drawLine(308, 105, 368, 165, eye);
-    display->drawLine(368, 105, 308, 165, eye);
+    display->drawLine(112, 105, 172, 165, accent);
+    display->drawLine(172, 105, 112, 165, accent);
+    display->drawLine(308, 105, 368, 165, accent);
+    display->drawLine(368, 105, 308, 165, accent);
   } else if (panelState == PanelState::Applied) {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
-    display->drawLine(205, 205, 225, 218, eye);
-    display->drawLine(225, 218, 255, 218, eye);
-    display->drawLine(255, 218, 275, 205, eye);
+    display->fillRoundRect(105, 102, 75, 76, 22, iconColor);
+    display->fillRoundRect(300, 102, 75, 76, 22, iconColor);
+    display->fillCircle(143, 141, 13, ui_style::kBackground);
+    display->fillCircle(338, 141, 13, ui_style::kBackground);
+    display->drawLine(205, 205, 225, 218, iconColor);
+    display->drawLine(225, 218, 255, 218, iconColor);
+    display->drawLine(255, 218, 275, 205, iconColor);
   } else {
-    display->fillRoundRect(105, 102, 75, 76, 22, eye);
-    display->fillRoundRect(300, 102, 75, 76, 22, eye);
-    display->fillCircle(143, 141, 13, background);
-    display->fillCircle(338, 141, 13, background);
+    display->fillRoundRect(105, 102, 75, 76, 22, iconColor);
+    display->fillRoundRect(300, 102, 75, 76, 22, iconColor);
+    display->fillCircle(143, 141, 13, ui_style::kBackground);
+    display->fillCircle(338, 141, 13, ui_style::kBackground);
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
+  display->fillRoundRect(110, 238, 260, 48, 18, accent);
+  drawCentered(stateLabel(panelState), 250, ui_style::kStatusTextSize, ui_style::kPrimaryText);
+
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
+  drawCentered(detail, 300, ui_style::kDetailTextSize, ui_style::kSecondaryText);
+
   if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
+    drawCentered(
+        WiFi.localIP().toString(), 326, ui_style::kDetailTextSize, ui_style::kSecondaryText);
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(20, 370, 210, 82, "PROBAR WSL", ui_style::kAccent);
+  drawButton(250, 370, 210, 82, "ENVIAR 3C", ui_style::kSuccess);
+}
+
+void enterCommandEditor() {
+  commandEditorOpen = true;
+  keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+  drawEditor();
+}
+
+void exitCommandEditor() {
+  commandEditorOpen = false;
+  drawPanel();
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -250,9 +339,14 @@ void playTone(uint16_t frequency, uint16_t durationMs) {
 
 void updatePanel(PanelState state, const String& detail, bool sound = false) {
   const bool changed = state != panelState;
+  const bool detailChanged = detail != panelDetail;
   panelState = state;
   panelDetail = detail;
-  drawPanel();
+
+  // While editing, network state is still recorded and logged, but the editor
+  // retains ownership of the display until the user exits edit mode.
+  if (!commandEditorOpen && (changed || detailChanged)) drawPanel();
+
   Serial.printf("PANEL STATE -> %s | %s\n", stateLabel(panelState), panelDetail.c_str());
   if (!sound || !changed) return;
   if (state == PanelState::Applied || state == PanelState::Ready) playTone(880, 70);
@@ -624,17 +718,19 @@ void handleTouch() {
           switch (key.definition.kind) {
             case KeyKind::Character:
               commandBuffer.insert(key.definition.label);
+              drawEditorText();
               break;
             case KeyKind::Backspace:
               commandBuffer.backspace();
+              drawEditorText();
               break;
             case KeyKind::Space:
               commandBuffer.insert(' ');
+              drawEditorText();
               break;
             case KeyKind::Enter:
               app_config::commandBuffer = commandBuffer.c_str();
-              commandEditorOpen = false;
-              drawPanel();
+              exitCommandEditor();
               send3CCommand(app_config::commandBuffer);
               touchDown = sample.touched;
               return;
@@ -642,25 +738,27 @@ void handleTouch() {
               keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
                   ? virtual_keyboard::KeyboardMode::NumericSymbols
                   : virtual_keyboard::KeyboardMode::Alpha;
-              break;
+              drawEditorKeyboard();
+              drawEditorText();
+              return;
           }
-          drawEditor();
+          drawEditorText();
         }
       } else if (sample.y >= 160 && sample.y < 215) {
         if (sample.x < 110) {
-          commandEditorOpen = false;
-          drawPanel();
+          exitCommandEditor();
         } else if (sample.x < 190) {
           commandBuffer.moveLeft();
-          drawEditor();
+          drawEditorText();
         } else if (sample.x < 270) {
           commandBuffer.deleteForward();
-          drawEditor();
+          drawEditorText();
         } else if (sample.x < 395) {
           keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
               ? virtual_keyboard::KeyboardMode::NumericSymbols
               : virtual_keyboard::KeyboardMode::Alpha;
-          drawEditor();
+          drawEditorKeyboard();
+          drawEditorText();
         }
       } else if (sample.y >= 42 && sample.y < 114) {
         // Tap in the text field: place cursor approximately at the tapped character.
@@ -677,16 +775,14 @@ void handleTouch() {
             if (distance < bestDistance) { bestDistance = distance; best = i; }
           }
           commandBuffer.setCursor(best);
-          drawEditor();
+          drawEditorText();
         }
       }
     } else if (sample.y >= 350) {
       if (sample.x < 240) {
         checkBackendHealth();
       } else {
-        commandEditorOpen = true;
-        keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
-        drawEditor();
+        enterCommandEditor();
       }
     }
   }
