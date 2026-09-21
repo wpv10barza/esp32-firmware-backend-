@@ -1,8 +1,73 @@
 # ESP32-S3-4848S040 Firmware + Backend Bridge
 
-Firmware reproducible para el panel cuadrado **ESP32-S3-4848S040 (480×480)** conectado al backend 3C que se ejecuta en Ubuntu/WSL.
+Firmware reproducible para el panel cuadrado **ESP32-S3-4848S040 (480×480)**, integrando la parte electrónica del panel con el firmware de control, la interfaz táctil y el backend 3C ejecutado en Ubuntu/WSL.
 
-## Alcance verificable
+El sistema separa claramente:
+
+- la capa electrónica del dispositivo;
+- la interfaz gráfica y táctil;
+- la lógica de firmware;
+- la comunicación con el backend;
+- la confirmación humana antes de modificar Google Sheets.
+
+## 1. Condiciones iniciales
+
+### 1.1 Plataforma electrónica
+
+El sistema está diseñado para el panel **ESP32-S3-4848S040** con:
+
+- microcontrolador ESP32-S3;
+- memoria Flash de 16 MB;
+- PSRAM OPI;
+- pantalla RGB de **480×480 píxeles**;
+- controlador LCD **ST7701**;
+- controlador táctil **GT911**;
+- comunicación táctil mediante I²C;
+- interfaz gráfica mediante Arduino-GFX;
+- interfaz de red mediante Wi-Fi;
+- interfaz de audio I²S opcional.
+
+La configuración de PlatformIO utiliza:
+
+```text
+Board: esp32-s3-devkitm-1
+Framework: Arduino
+Platform: espressif32@6.8.1
+Flash: 16 MB
+PSRAM: OPI
+Monitor serie: 115200 baud
+```
+
+### 1.2 Arquitectura funcional
+
+La solución se organiza en capas para mantener separadas las responsabilidades de hardware, interfaz, control y servicios:
+
+```text
+ESP32-S3-4848S040
+├── Hardware
+│   ├── ESP32-S3
+│   ├── LCD ST7701
+│   ├── Touch GT911 / I²C
+│   └── Wi-Fi / I²S opcional
+│
+├── Firmware
+│   ├── inicialización del dispositivo
+│   ├── interfaz gráfica
+│   ├── eventos táctiles
+│   ├── editor / commandBuffer
+│   └── comunicación HTTP
+│
+└── Backend 3C en Ubuntu/WSL
+    ├── recepción de comandos
+    ├── validación
+    ├── vista previa
+    ├── confirmación humana
+    └── aplicación controlada sobre Google Sheets
+```
+
+El ESP32 actúa como cliente del servicio. La lógica de modificación de datos permanece en el backend y la escritura en Google Sheets requiere confirmación humana.
+
+## 2. Alcance verificable
 
 - compila firmware para ESP32-S3 N16R8 con pantalla ST7701 y táctil GT911;
 - consume el contrato HTTP `/api/device/v1/health`, `POST /api/device/v1/commands` y `GET /api/device/v1/commands/{command_id}`;
@@ -13,7 +78,7 @@ Firmware reproducible para el panel cuadrado **ESP32-S3-4848S040 (480×480)** co
 
 GitHub Actions demuestra **compilación**, no carga ni validación física. La prueba física requiere el panel conectado por USB.
 
-## Uso directo en Ubuntu/WSL
+## 3. Uso directo en Ubuntu/WSL
 
 ```bash
 git clone https://github.com/wpv10barza/esp32-firmware-backend-.git
@@ -34,7 +99,7 @@ El script `scripts/flash-panel.sh` compila primero y después detecta automátic
 
 No es necesario crear ni activar `.venv` para este procedimiento. El comando `pio` funciona si PlatformIO está instalado en el entorno Python activo.
 
-### USB de ESP32 hacia WSL 2
+### 3.1 USB de ESP32 hacia WSL 2
 
 Si `pio device list` no muestra ningún puerto y no existen `/dev/ttyACM*` ni `/dev/ttyUSB*`, el problema está antes de PlatformIO: WSL no tiene acceso al USB del ESP32. En Windows, verifique el dispositivo con `usbipd list` y, desde una consola de Windows, adjúntelo a WSL con:
 
@@ -51,13 +116,13 @@ pio device list
 ls -l /dev/ttyACM* /dev/ttyUSB*
 ```
 
-El `BUSID` es el identificador mostrado por `usbipd list`. Si el dispositivo aparece en Windows pero no en WSL, no fuerce `/dev/ttyUSB0`: el ESP32-S3 puede exponerse como otro puerto serie, por ejemplo `/dev/ttyACM0`. `pio device list` es la referencia para seleccionar el puerto real. citeturn429716search3turn429716search0
+El `BUSID` es el identificador mostrado por `usbipd list`. Si el dispositivo aparece en Windows pero no en WSL, no fuerce `/dev/ttyUSB0`: el ESP32-S3 puede exponerse como otro puerto serie, por ejemplo `/dev/ttyACM0`. `pio device list` es la referencia para seleccionar el puerto real.
 
 En `local_config.h`, use la **IPv4 LAN de Windows** para el backend. Un ESP32 físico no puede acceder a `127.0.0.1` de WSL.
 
 > Seguridad: no versionar Wi-Fi, token, credenciales de Google ni identificadores privados. El ESP32 nunca escribe directamente en Sheets; solicita una vista previa al backend.
 
-## E2E real contra Google Sheets en GitHub Actions
+## 4. E2E real contra Google Sheets en GitHub Actions
 
 Este repositorio separa dos niveles de validación:
 
@@ -66,7 +131,7 @@ Este repositorio separa dos niveles de validación:
 
 La CI no puede convertir un runner de GitHub en un ESP32 físico. Por ello, la prueba E2E reproduce exactamente el contrato HTTP que ejecuta `send3CCommand()` y `pollCommandStatus()`, mientras que Google Sheets sí es el servicio real.
 
-### Secretos requeridos
+### 4.1 Secretos requeridos
 
 Configurar en **Settings → Secrets and variables → Actions → Secrets** del repositorio:
 
