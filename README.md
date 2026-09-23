@@ -1,6 +1,6 @@
 T-030 System ESP32-S3-4848S040 plus Backend Asistente 3C
 
-# V15 Integrated Documentation — V6 Benchmark + V14.1
+# V15 Integrated Documentation — V14.1 + V15 (V6 Benchmark retained)
 
 This README is the single consolidated documentation record for the T-030 system. It **retains the V6 Benchmark baseline** and **integrates the V14.1 design/evidence expansion**. Neither version is treated as a replacement for the other.
 
@@ -12,29 +12,54 @@ The integration rule is: preserve documented technical content, remove only dire
 
 ## 0. Version integration and traceability
 
-### V6 retained baseline
+This README is the **single documentation record** obtained by integrating the V14.1 and V15 documentation versions. The V14.1 content is preserved as the design/evidence layer; V15 is the consolidation and control layer. The earlier V6 Benchmark baseline remains retained because it contains the complete initial-conditions record used by both versions.
 
-The complete V6 Benchmark conditions remain the foundational description of the development environment, the embedded subsystem, the Asistente 3C subsystem, the data flow, security conditions, infrastructure, and components explicitly not established as part of that version.
+**Neither V14.1 nor V15 is replaced or discarded. The two records are joined, contrasted, and reconciled in one document.**
 
-### V14.1 integrated expansion
+### V14.1 preserved layer
 
-V14.1 adds the structured sections for system design, electronic design, software design, implementation evidence markers, tactile-interface placeholders, validation/commissioning boundaries, and the explicit documentation-control rule:
+V14.1 establishes the controlled design record reached before the V15 consolidation. Its documented scope includes:
+
+1. Initial conditions and documentation boundaries for the ESP32-S3-4848S040 panel and Asistente 3C backend.
+2. **3.2 Design of the system** as the architectural layer separating interaction, transport, interpretation, deterministic validation, human review, persistence, and result reporting.
+3. **3.2.1 Electronic design**, including the 480 × 480 RGB/ST7701 display architecture, GT911 touch interface, `panel_4848s040` target, repository evidence markers, and external WEB references.
+4. **3.2.2 Software design**, including Node.js, Express, React, GenAI, and the repository implementation markers.
+5. Reserved sections for tactile design, tactile treatment, implementation, validation, and commissioning where execution evidence had not yet been consolidated.
+6. The explicit control boundary:
 
 **No modification or reflashing of firmware**
 
-### Cross-version reconciliation
+### V15 consolidation layer
 
-The two versions are consistent in the following core architectural points:
+V15 adds the integration controls required to preserve the V14.1 record while joining it with the broader V6 baseline. The V15 layer therefore:
 
-1. Both identify the ESP32-S3-4848S040 panel and the Asistente 3C backend as coordinated subsystems.
-2. Both separate command interpretation from deterministic validation and from persistence authority.
-3. Both preserve human review as a control before an authorized write.
-4. Both identify the display/touch architecture around the RGB/ST7701 and GT911 subsystems.
-5. V6 provides the broader initial-conditions and operational baseline; V14.1 narrows the present documentation stage and adds traceability markers for implementation evidence.
-6. V6 states that FastAPI/Flask and Google Cloud Storage are not established components of that baseline. V14.1 does not introduce either as implemented architecture.
-7. V6 identifies the authenticated web interface as the effective persistence path for the documented Google Sheets flow. V14.1 preserves the separation between transport, interpretation, validation, review, and persistence rather than assigning direct write authority to the embedded panel.
+1. Retains the V6 Benchmark initial conditions instead of deleting them.
+2. Keeps the V14.1 design sections in the same README.
+3. Contrasts the two versions when wording, scope, or evidence level differs.
+4. Distinguishes external WEB evidence, repository evidence, and execution evidence.
+5. Preserves the controlled sequence:
 
-Where wording differs, this document keeps the broader V6 evidence while using the V14.1 terminology for the current documentation structure. No firmware or hardware claim is inferred from documentation alone.
+**WEB FIRST → VERIFY → REPOSITORY AFTER → BYTE-FOR-BYTE VALIDATION**
+
+6. Prohibits interpreting a documentation change as authorization to modify or reflash firmware.
+
+### Cross-version contrast and reconciliation
+
+| Documentation aspect | V14.1 record | V15 record | Unified treatment |
+|---|---|---|---|
+| Initial conditions | Focused on the current controlled documentation stage and the two coordinated subsystems. | Retains the broader V6 Benchmark baseline as the historical technical foundation. | The full V6 baseline remains intact; V14.1 is layered over it as the structured design record. |
+| System architecture | Defines the separation of interaction, interpretation, deterministic validation, review, and persistence. | Consolidates those responsibilities with the existing V6 operational description. | The architectural separation is retained without assigning write authority to the AI or the embedded panel. |
+| Electronic design | Documents ESP32-S3-4848S040, RGB/ST7701, GT911, `panel_4848s040`, and implementation markers. | Adds traceability and evidence-level control around those statements. | V14.1 hardware/design content remains the authoritative documentation layer; V15 adds provenance and control. |
+| Software design | Documents Node.js, Express, React, GenAI and the required source-reference markers. | Reconciles these references with the V6 backend/data-flow description. | Both are retained; duplicated wording is consolidated while distinct implementation boundaries remain explicit. |
+| Validation | States that later validation must use actual evidence. | Explicitly separates WEB, repository, and execution evidence. | No runtime result is inferred from documentation or source inspection alone. |
+| Change boundary | No firmware modification or reflashing. | Makes the same rule a final consolidation control. | The restriction is preserved unchanged and repeated only where it provides traceability. |
+| Documentation purpose | Controlled V14.1 design/evidence record. | Single consolidated V15 repository record. | One README now contains both purposes without treating either version as deleted. |
+
+### Version-control rule
+
+When the two versions contain equivalent statements, the unified README keeps one technically consistent statement and preserves the version relationship through this section. When a V14.1 statement adds detail that is not present in V15, that detail is retained in the relevant V14.1 design section. When V15 adds broader baseline or control information, that information is retained in the V6/V15 sections below.
+
+Where a statement would imply a physical test, flashing event, deployment, or runtime result, the unified document keeps the more conservative evidence wording unless explicit execution evidence exists.
 
 ## 1. V6 Benchmark — retained initial conditions
 
@@ -267,7 +292,7 @@ V6 and V14.1 provide documentation and repository-level evidence. They must not 
 
 ## Final integrated control principle
 
-This README is one documentation set containing both the V6 Benchmark baseline and the V14.1 controlled design expansion.
+This README is one documentation set containing the V6 Benchmark baseline, the preserved V14.1 design/evidence record, and the V15 consolidation/control layer.
 
 **WEB FIRST then REPOSITORY AFTER**
 
@@ -277,4 +302,4 @@ The controlled sequence remains:
 
 **WEB FIRST → VERIFY → REPOSITORY AFTER → BYTE-FOR-BYTE VALIDATION**
 
-The consolidation is documentation-only. It does not modify firmware source, firmware configuration, hardware, GPIO assignments, display initialization, backend architecture, or unrelated repository files.
+The consolidation is documentation-only. It does not modify firmware source, firmware configuration, hardware, GPIO assignments, display initialization, backend architecture, or unrelated repository files. V14.1 and V15 remain represented together in this single README.
