@@ -260,67 +260,75 @@ La implementación vigente utiliza la biblioteca `@google/genai`. El modelo conf
 
 La llamada al modelo se realiza mediante `ai.models.generateContent`. La configuración establece `temperature: 0`, orientando la generación hacia un comportamiento controlado y reduciendo la variabilidad en la interpretación de comandos equivalentes.
 
-La salida se solicita con `responseMimeType: "application/json"` y mediante un `responseSchema` definido explícitamente. El esquema establece campos para la tarea buscada, el identificador de tarea cuando corresponda, las operaciones propuestas y la indicación de si se requiere revisión. De esta manera, el resultado del modelo no se consume como texto libre para ejecutar cambios, sino como una estructura inspeccionable por las reglas deterministas.
+La salida se solicita con `responseMimeType: "application/json"` y mediante un `responseSchema` definido explícitamente. El esquema establece campos para la tarea buscada, el identificador de tarea cuando corresponda, las operaciones propuestas y la indicación de si se requiere revisión. El resultado del modelo se procesa como una estructura verificable y no como texto libre destinado a ejecutar cambios.
 
-La función del modelo se limita, por tanto, a la interpretación semántica. El flujo posterior mantiene la separación entre modelo, salida estructurada, validación determinista, localización de tarea, propuesta, revisión humana y persistencia autorizada.
+La función del modelo se limita, por tanto, a la interpretación semántica. El flujo lógico posterior conserva la separación entre modelo, salida estructurada, validación determinista, localización de tarea, propuesta, revisión humana y persistencia autorizada.
 
 #### 3.2.3.2 Entrada contextual y grounding con información real
 
-La interpretación no se realiza únicamente a partir de la instrucción del usuario. El endpoint de extracción recibe `detectedHeaders` y `detectedCatalogs`, que representan la estructura y los valores permitidos proporcionados por el flujo de la aplicación.
+La implementación recibe `detectedHeaders` y `detectedCatalogs` como contexto para la etapa de interpretación. Los encabezados permiten contrastar la estructura real de la hoja, mientras que los catálogos proporcionan los valores existentes que pueden utilizarse en los campos categóricos controlados.
 
-Los encabezados permiten contrastar la estructura de la hoja, mientras que los catálogos proporcionan los valores existentes que pueden utilizarse para los campos categóricos controlados. La búsqueda de la tarea se mantiene vinculada a la estructura de la estrategia: `Nombre` corresponde a la columna F y `TareaId` a la columna E cuando este último es especificado explícitamente.
+La identificación de la tarea se mantiene vinculada a la estructura de la estrategia. La implementación establece la búsqueda por `Nombre` en la columna F y permite utilizar `TareaId` en la columna E cuando el usuario lo especifica explícitamente. Esta distinción evita que el modelo invente identificadores o interprete como identidad una columna diferente de la establecida por el contrato.
 
-Los catálogos de `ItemMantenible`, `ModoDeFalla`, `Especialidad` y `Labour1` forman parte del contexto permitido para la interpretación. La validación posterior exige que los valores catalogados correspondan a elementos existentes.
+Los catálogos utilizados como contexto corresponden a `ItemMantenible`, `ModoDeFalla`, `Especialidad` y `Labour1`. La finalidad de este mecanismo es restringir la interpretación a valores que realmente existen en la fuente contextualizada.
 
-En esta implementación no se evidencia recuperación vectorial dentro del endpoint `/api/extract`. El grounding documentado para este componente es tabular y estructural: encabezados, catálogos y reglas explícitas. Por tanto, no se atribuye a este flujo una implementación RAG vectorial que no esté sustentada por el código inspeccionado.
+En esta implementación específica no se evidencia una recuperación vectorial para la etapa de `/api/extract`. El grounding documentado para este componente es tabular y estructural: encabezados, catálogos y reglas de operación. No se atribuye aquí una arquitectura RAG vectorial que no aparece implementada en este flujo.
 
 #### 3.2.3.3 Contrato de salida estructurada
 
-El `responseSchema` define una estructura de respuesta que contiene `tarea_buscada`, `operaciones` y `requiere_revision`, además de `tarea_id` y `motivo_revision` cuando corresponden.
+El `responseSchema` define una estructura de respuesta que contiene, como mínimo, `tarea_buscada`, `operaciones` y `requiere_revision`, además de `tarea_id` y `motivo_revision` cuando corresponda.
 
-Cada operación identifica un campo permitido, su valor propuesto y, opcionalmente, una razón. Los campos válidos se encuentran definidos previamente en `FIELD_RULES`; por tanto, el modelo no determina libremente qué columnas del sistema pueden modificarse.
+Cada operación identifica un campo permitido, su valor propuesto y opcionalmente una razón asociada. Los campos permitidos se encuentran definidos previamente en `FIELD_RULES`; por tanto, el modelo no determina libremente qué columnas del sistema pueden modificarse.
 
-La lista blanca implementada comprende los campos asociados a las columnas B, C, H, I, J, K, L, M, N y O. Las columnas de identidad, búsqueda y cualquier columna fuera de esta lista no forman parte del dominio de actualización.
+La lista blanca vigente comprende los campos asociados a las columnas B, C, H, I, J, K, L, M, N y O. Las columnas de identidad, búsqueda o cualquier columna fuera de la lista autorizada permanecen fuera del dominio de modificación.
 
-El contrato estructurado establece la frontera entre generación y ejecución: la inteligencia artificial propone una estructura y el software determina si esa estructura satisface las reglas del sistema.
+El contrato estructurado establece así una frontera entre generación y ejecución: la inteligencia artificial propone una estructura y la aplicación determina si dicha estructura es aceptable.
 
 #### 3.2.3.4 Validación determinista posterior al modelo
 
-La respuesta generada se procesa mediante una segunda etapa de validación programática. Cada operación se verifica contra `FIELD_RULES` y se comprueba que la columna asociada corresponda al encabezado esperado.
+La respuesta generada se procesa mediante una segunda etapa de validación programática. Antes de aceptar cada operación, el sistema verifica que el campo recibido pertenezca a `FIELD_RULES`.
 
-Los valores catalogados se comparan mediante normalización y el valor final debe corresponder a un elemento existente del catálogo. Las frecuencias se convierten en enteros y deben ser mayores o iguales a uno. Las unidades se normalizan a formas canónicas como `Mes`, `año`, `Semana`, `Dia` y `Hora`.
+Posteriormente se comprueba que la columna asociada coincida con el encabezado esperado. Cuando existe una discrepancia entre la estructura detectada y la definición de una columna, la auditoría se detiene en lugar de continuar con una operación potencialmente incorrecta.
 
-Los campos de texto largo se protegen además contra contenido abreviado mediante expresiones como `...`, `…` o `etc.`, para preservar el contenido descriptivo completo.
+Los valores de catálogo se normalizan para comparación, pero el valor finalmente utilizado debe corresponder a un elemento existente del catálogo. Esto evita convertir una variación de mayúsculas, minúsculas o acentuación en un valor nuevo no autorizado.
+
+Las frecuencias se convierten en valores enteros y deben ser mayores o iguales a uno. Las unidades de tiempo se normalizan hacia representaciones canónicas como `Mes`, `año`, `Semana`, `Dia` y `Hora`.
+
+Los campos de texto largo rechazan expresiones incompletas como `...`, `…` o `etc.`, debido a que la información destinada a la fuente maestra debe conservar el contenido descriptivo completo.
 
 #### 3.2.3.5 Límites de autoridad del agente de IA
 
-El agente de IA no posee autoridad directa de escritura sobre la fuente maestra. El endpoint `/api/extract` interpreta la instrucción y devuelve una estructura de operaciones validada, pero no ejecuta por sí mismo una actualización sobre Google Sheets.
+El agente no posee autoridad directa para modificar la fuente maestra. El endpoint `/api/extract` interpreta la instrucción y devuelve una estructura de operaciones validada, pero no ejecuta por sí mismo una escritura sobre Google Sheets.
 
-La recepción de una orden tampoco equivale a su aplicación. El resultado de la interpretación se incorpora a la propuesta y a la revisión controlada. La inteligencia artificial actúa como componente de interpretación semántica dentro de un flujo gobernado por reglas deterministas y revisión humana.
+La recepción de una orden y su interpretación tampoco equivalen a su aplicación. El resultado del modelo se incorpora al proceso de propuesta y revisión, manteniendo separadas la interpretación, la validación y la persistencia.
+
+La autoridad de la inteligencia artificial se limita a interpretar la intención expresada por el usuario dentro del contrato de campos, encabezados, catálogos y reglas proporcionado como contexto.
 
 #### 3.2.3.6 Integración con revisión humana
 
-Cuando la estructura resultante requiere revisión o no contiene operaciones válidas, el sistema establece `requiere_revision`. Las propuestas pueden ser registradas mediante `reviewStore`, conservando la fila objetivo, la coincidencia localizada, las operaciones y, cuando corresponde, el identificador de la orden externa.
+Cuando la estructura resultante requiere revisión o no contiene operaciones válidas, el sistema establece `requiere_revision`. La propuesta puede registrarse posteriormente mediante `reviewStore`.
 
-La aprobación o el rechazo se mantiene como una etapa separada de la generación del modelo. Una respuesta estructurada válida no constituye por sí sola una orden de escritura ejecutada.
+La propuesta conserva la fila objetivo, la coincidencia localizada, las operaciones solicitadas y, cuando corresponde, el identificador de la orden externa que originó el proceso. La revisión humana se mantiene como condición entre la propuesta generada y la persistencia.
+
+Este diseño impide interpretar una respuesta correcta del modelo como una escritura automática. La decisión final permanece separada de la generación probabilística y se ejecuta mediante el flujo de aprobación o rechazo.
 
 #### 3.2.3.7 Secuencia completa de procesamiento de una instrucción
 
-El procesamiento se organiza en la siguiente secuencia:
+El procesamiento se estructura en las siguientes etapas técnicas:
 
-1. Recepción de una instrucción en lenguaje natural.
-2. Disponibilidad de encabezados, estructura y catálogos contextuales.
-3. Llamada a Gemini mediante `@google/genai`.
-4. Generación de JSON con esquema definido.
+1. Recepción de la instrucción en lenguaje natural.
+2. Incorporación de encabezados, estructura y catálogos disponibles.
+3. Envío al modelo Gemini mediante `@google/genai`.
+4. Generación de respuesta JSON con esquema definido.
 5. Parseo de la respuesta.
-6. Verificación determinista de campos y columnas.
+6. Verificación determinista del campo y de la columna asociada.
 7. Validación de catálogos, frecuencias, unidades y contenido textual.
-8. Identificación de la tarea por `Nombre` o `TareaId`.
-9. Construcción de la propuesta.
+8. Determinación de la tarea objetivo por `Nombre` o `TareaId`.
+9. Generación de una propuesta controlada.
 10. Revisión humana.
-11. Persistencia autorizada conforme al flujo de la aplicación.
+11. Persistencia después de la autorización correspondiente.
 
-La separación de estas etapas evita convertir una salida probabilística en una modificación automática. Los errores de estructura, campos, encabezados, catálogos o valores se tratan como condiciones de validación y no como autorización implícita de escritura.
+La secuencia mantiene separadas las responsabilidades de interpretación semántica y ejecución determinista. Un error de formato, una discrepancia de encabezado, un valor de catálogo inexistente o una condición no verificable interrumpe el avance normal del proceso en lugar de convertir la salida del modelo en una modificación directa.
 
 ### 3.2.4 Tactile interface design
 
