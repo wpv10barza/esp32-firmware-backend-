@@ -16,7 +16,8 @@ git -C "$TMP" init -q
 git -C "$TMP" config user.email "v15-test@example.com"
 git -C "$TMP" config user.name "V15 Test"
 
-printf '# V6 Benchmark fixture\n' > "$TMP/README.md"
+printf '# V6 Benchmark fixture
+' > "$TMP/README.md"
 git -C "$TMP" add README.md
 git -C "$TMP" commit -qm "fixture"
 
@@ -25,7 +26,7 @@ set +e
   cd "$TMP"
   V15_DRY_RUN=1 bash "$SCRIPT" > /tmp/v15-missing.log 2>&1
 )
-RC=?
+RC=$?
 set -e
 [[ "$RC" -eq 22 ]] || fail "missing V14.1 exit=$RC expected=22"
 grep -Fq "V15 BLOCKED: authoritative local V14.1 README not found." /tmp/v15-missing.log ||
@@ -51,7 +52,7 @@ set +e
   cd "$TMP"
   V141_README="$TMP/README_V14.1.md" V15_DRY_RUN=1 bash "$SCRIPT" > /tmp/v15-v6.log 2>&1
 )
-RC=?
+RC=$?
 set -e
 [[ "$RC" -eq 23 ]] || fail "V6 protection exit=$RC expected=23"
 grep -Fq "INVALID: candidate is the V6 Benchmark README" /tmp/v15-v6.log ||
@@ -76,7 +77,7 @@ set +e
   cd "$TMP"
   V141_README="$TMP/README_V14.1.md" V15_DRY_RUN=1 bash "$SCRIPT" > /tmp/v15-invalid.log 2>&1
 )
-RC=?
+RC=$?
 set -e
 [[ "$RC" -eq 23 ]] || fail "missing restriction exit=$RC expected=23"
 grep -Fq "MISSING: No modification or reflashing of firmware" /tmp/v15-invalid.log ||
@@ -90,9 +91,9 @@ V14.1
 3.2.1 Electronic design
 3.2.2 Software design
 st7701_type8_init_operations
-server/deviceApi.ts
 server/deviceCommands.ts
 server/reviewControl.ts
+server/deviceApi.ts
 WEB FIRST then REPOSITORY AFTER
 No modification or reflashing of firmware
 EOF
