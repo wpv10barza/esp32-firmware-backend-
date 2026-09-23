@@ -161,6 +161,8 @@ La interfaz web autenticada constituye el componente que coordina la consulta y 
 
 ### 3.1.13 Criterio editorial y de control V6
 
+The V6 Benchmark baseline is retained as a documented technical source within this consolidated Chapter III record. Its statements are preserved as baseline documentation and are not reinterpreted as execution results.
+
 ### 3.1.14 Criterio de redacción y fuentes de la línea base
 
 La documentación principal del repositorio se mantiene en tercera persona y mediante párrafos técnicos. Los detalles de implementación de bajo nivel, código fuente, comandos de instalación, asignaciones de pines, direcciones concretas, procedimientos de diagnóstico y configuraciones sensibles se reservan para los anexos y documentos técnicos correspondientes.
@@ -169,7 +171,7 @@ Fuentes verificadas en la versión V6: configuración vigente del firmware, impl
 
 Versión V6 Benchmark - Sistema completo obligatorio - Firmware + Backend - Sin componentes no evidenciados
 
-### V14.1 Design expansion
+**V14.1 Design expansion.** The following Section 3.2 preserves the V14.1 design/evidence layer inside the consolidated Chapter III hierarchy.
 
 ## 3.2 Design of the system
 
@@ -256,9 +258,36 @@ Pending controlled documentation section. It is reserved for the tactile interac
 
 Pending controlled documentation section. It is reserved for the documented treatment of tactile events, debouncing or event filtering where evidenced, interaction priority, visual feedback, and state transitions.
 
+### 3.2.5 Integrated evidence status
+
+The integrated documentation distinguishes three evidence levels:
+
+- **External WEB evidence:** technical background checked against the referenced external documentation.
+- **Repository evidence:** source/configuration references observed in the repository.
+- **Execution evidence:** compilation, automated test, physical display/touch operation, deployment, or other runtime verification.
+
+V6 and V14.1 provide documentation and repository-level evidence. They must not be interpreted as execution evidence unless an explicit test record exists.
+
 ## 3.3 Implementation
 
+
 Pending controlled documentation section. This section is reserved for implementation evidence after the current 3.2 design documentation has been completed and verified.
+
+## 3.4 Validation
+
+Pending controlled documentation section. Validation results must be reported from actual evidence and must not be inferred from compilation, source inspection, or documentation alone.
+
+### 3.4.1 Evidence boundary
+
+Validation in this document remains an evidence boundary. Repository inspection and external WEB references are not substitutes for execution, automated test, physical display/touch operation, deployment, or other runtime evidence.
+
+## 3.5 Commissioning
+
+Pending controlled documentation section. Commissioning remains outside the scope of this README consolidation unless separately authorized and supported by execution evidence.
+
+### 3.5.1 Commissioning boundary
+
+No commissioning result is claimed by the present documentation consolidation. Any future commissioning record must be added under this hierarchy with dated and reproducible evidence.
 
 ## 3.4 Validation
 
@@ -289,16 +318,6 @@ The V14.1 consolidation preserves these exact implementation evidence markers fo
 `server/reviewControl.ts`
 
 The references are documentary traceability markers. They are not instructions to modify source code.
-
-### 3.2.5 Integrated evidence status
-
-The integrated documentation distinguishes three evidence levels:
-
-- **External WEB evidence:** technical background checked against the referenced external documentation.
-- **Repository evidence:** source/configuration references observed in the repository.
-- **Execution evidence:** compilation, automated test, physical display/touch operation, deployment, or other runtime verification.
-
-V6 and V14.1 provide documentation and repository-level evidence. They must not be interpreted as execution evidence unless an explicit test record exists.
 
 ## 3.6 Final integrated documentation control
 
