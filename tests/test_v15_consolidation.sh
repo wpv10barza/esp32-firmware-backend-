@@ -10,7 +10,7 @@ pass() { echo "PASS: $*"; }
 bash -n "$SCRIPT" || fail "bash syntax"
 
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP" /tmp/v15-missing.log /tmp/v15-v6.log /tmp/v15-invalid.log /tmp/v15-valid.log' EXIT
+trap 'rm -rf "$TMP" /tmp/v15-missing.log /tmp/v15-v6.log /tmp/v15-invalid.log /tmp/v15-valid.log /tmp/v15-url.log' EXIT
 
 git -C "$TMP" init -q
 git -C "$TMP" config user.email "v15-test@example.com"
@@ -109,5 +109,17 @@ EOF
 grep -Fq "V14.1 validation: PASS" /tmp/v15-valid.log ||
   fail "V14.1 PASS diagnostic absent"
 pass "valid V14.1 passes all controls"
+
+set +e
+(
+  cd "$TMP"
+  V141_README="https://example.invalid/README.md" V15_DRY_RUN=1 bash "$SCRIPT" > /tmp/v15-url.log 2>&1
+)
+RC=$?
+set -e
+[[ "$RC" -eq 22 ]] || fail "remote URL candidate exit=$RC expected=22"
+grep -Fq "V15 BLOCKED: authoritative local V14.1 README not found." /tmp/v15-url.log ||
+  fail "remote URL diagnostic absent"
+pass "remote URL cannot be treated as local README"
 
 echo "ALL V15 CONSOLIDATION TESTS PASSED"
