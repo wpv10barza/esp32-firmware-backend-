@@ -26,6 +26,10 @@ find_v141() {
 
 validate_v141() {
   local file="$1"
+
+  # V6 protection has priority over all other validation rules.
+  # A known V6 Benchmark README must never be mistaken for V14.1.
+
   local first_line
   first_line="$(head -n 1 "$file" | tr -d '\r')"
 
