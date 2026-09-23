@@ -250,15 +250,87 @@ The required software evidence markers for the V14.1 record are preserved explic
 
 `server/deviceApi.ts` is retained as the device API evidence reference; `server/deviceCommands.ts` as the command normalization/state reference; and `server/reviewControl.ts` as the human-review control reference. The README records these as implementation evidence markers and does not modify their contents as part of this documentation consolidation.
 
-### 3.2.3 Tactile interface design
+### 3.2.3 Diseño del agente de IA - Modelo de inteligencia artificial y procesamiento controlado
+
+El agente de inteligencia artificial constituye la capa de interpretación semántica del sistema Asistente 3C. Su función es transformar una instrucción expresada en lenguaje natural en una representación estructurada de la tarea y de las operaciones solicitadas, la cual posteriormente es sometida a validaciones deterministas y al flujo de revisión humana. En consecuencia, la generación del modelo no se considera una autorización autónoma para modificar la fuente maestra.
+
+La implementación vigente utiliza la biblioteca `@google/genai`. El modelo configurado por defecto es `gemini-2.5-flash`, aunque su selección puede sustituirse mediante la variable de entorno `GEMINI_MODEL`. Esta configuración mantiene separado el comportamiento del software respecto del identificador concreto del modelo utilizado durante una ejecución determinada.
+
+#### 3.2.3.1 Función del modelo
+
+La llamada al modelo se realiza mediante `ai.models.generateContent`. La configuración establece `temperature: 0`, orientando la generación hacia un comportamiento controlado y reduciendo la variabilidad en la interpretación de comandos equivalentes.
+
+La salida se solicita con `responseMimeType: "application/json"` y mediante un `responseSchema` definido explícitamente. El esquema establece campos para la tarea buscada, el identificador de tarea cuando corresponda, las operaciones propuestas y la indicación de si se requiere revisión. De esta manera, el resultado del modelo no se consume como texto libre para ejecutar cambios, sino como una estructura inspeccionable por las reglas deterministas.
+
+La función del modelo se limita, por tanto, a la interpretación semántica. El flujo posterior mantiene la separación entre modelo, salida estructurada, validación determinista, localización de tarea, propuesta, revisión humana y persistencia autorizada.
+
+#### 3.2.3.2 Entrada contextual y grounding con información real
+
+La interpretación no se realiza únicamente a partir de la instrucción del usuario. El endpoint de extracción recibe `detectedHeaders` y `detectedCatalogs`, que representan la estructura y los valores permitidos proporcionados por el flujo de la aplicación.
+
+Los encabezados permiten contrastar la estructura de la hoja, mientras que los catálogos proporcionan los valores existentes que pueden utilizarse para los campos categóricos controlados. La búsqueda de la tarea se mantiene vinculada a la estructura de la estrategia: `Nombre` corresponde a la columna F y `TareaId` a la columna E cuando este último es especificado explícitamente.
+
+Los catálogos de `ItemMantenible`, `ModoDeFalla`, `Especialidad` y `Labour1` forman parte del contexto permitido para la interpretación. La validación posterior exige que los valores catalogados correspondan a elementos existentes.
+
+En esta implementación no se evidencia recuperación vectorial dentro del endpoint `/api/extract`. El grounding documentado para este componente es tabular y estructural: encabezados, catálogos y reglas explícitas. Por tanto, no se atribuye a este flujo una implementación RAG vectorial que no esté sustentada por el código inspeccionado.
+
+#### 3.2.3.3 Contrato de salida estructurada
+
+El `responseSchema` define una estructura de respuesta que contiene `tarea_buscada`, `operaciones` y `requiere_revision`, además de `tarea_id` y `motivo_revision` cuando corresponden.
+
+Cada operación identifica un campo permitido, su valor propuesto y, opcionalmente, una razón. Los campos válidos se encuentran definidos previamente en `FIELD_RULES`; por tanto, el modelo no determina libremente qué columnas del sistema pueden modificarse.
+
+La lista blanca implementada comprende los campos asociados a las columnas B, C, H, I, J, K, L, M, N y O. Las columnas de identidad, búsqueda y cualquier columna fuera de esta lista no forman parte del dominio de actualización.
+
+El contrato estructurado establece la frontera entre generación y ejecución: la inteligencia artificial propone una estructura y el software determina si esa estructura satisface las reglas del sistema.
+
+#### 3.2.3.4 Validación determinista posterior al modelo
+
+La respuesta generada se procesa mediante una segunda etapa de validación programática. Cada operación se verifica contra `FIELD_RULES` y se comprueba que la columna asociada corresponda al encabezado esperado.
+
+Los valores catalogados se comparan mediante normalización y el valor final debe corresponder a un elemento existente del catálogo. Las frecuencias se convierten en enteros y deben ser mayores o iguales a uno. Las unidades se normalizan a formas canónicas como `Mes`, `año`, `Semana`, `Dia` y `Hora`.
+
+Los campos de texto largo se protegen además contra contenido abreviado mediante expresiones como `...`, `…` o `etc.`, para preservar el contenido descriptivo completo.
+
+#### 3.2.3.5 Límites de autoridad del agente de IA
+
+El agente de IA no posee autoridad directa de escritura sobre la fuente maestra. El endpoint `/api/extract` interpreta la instrucción y devuelve una estructura de operaciones validada, pero no ejecuta por sí mismo una actualización sobre Google Sheets.
+
+La recepción de una orden tampoco equivale a su aplicación. El resultado de la interpretación se incorpora a la propuesta y a la revisión controlada. La inteligencia artificial actúa como componente de interpretación semántica dentro de un flujo gobernado por reglas deterministas y revisión humana.
+
+#### 3.2.3.6 Integración con revisión humana
+
+Cuando la estructura resultante requiere revisión o no contiene operaciones válidas, el sistema establece `requiere_revision`. Las propuestas pueden ser registradas mediante `reviewStore`, conservando la fila objetivo, la coincidencia localizada, las operaciones y, cuando corresponde, el identificador de la orden externa.
+
+La aprobación o el rechazo se mantiene como una etapa separada de la generación del modelo. Una respuesta estructurada válida no constituye por sí sola una orden de escritura ejecutada.
+
+#### 3.2.3.7 Secuencia completa de procesamiento de una instrucción
+
+El procesamiento se organiza en la siguiente secuencia:
+
+1. Recepción de una instrucción en lenguaje natural.
+2. Disponibilidad de encabezados, estructura y catálogos contextuales.
+3. Llamada a Gemini mediante `@google/genai`.
+4. Generación de JSON con esquema definido.
+5. Parseo de la respuesta.
+6. Verificación determinista de campos y columnas.
+7. Validación de catálogos, frecuencias, unidades y contenido textual.
+8. Identificación de la tarea por `Nombre` o `TareaId`.
+9. Construcción de la propuesta.
+10. Revisión humana.
+11. Persistencia autorizada conforme al flujo de la aplicación.
+
+La separación de estas etapas evita convertir una salida probabilística en una modificación automática. Los errores de estructura, campos, encabezados, catálogos o valores se tratan como condiciones de validación y no como autorización implícita de escritura.
+
+### 3.2.4 Tactile interface design
 
 Pending controlled documentation section. It is reserved for the tactile interaction design of the ESP32-S3-4848S040 panel, including the documented touch-controller interface, interaction regions, priority rules, cursor interaction, keyboard behavior, and touch-hit testing once the corresponding evidence is consolidated.
 
-### 3.2.4 Tactile treatment
+### 3.2.5 Tactile treatment
 
 Pending controlled documentation section. It is reserved for the documented treatment of tactile events, debouncing or event filtering where evidenced, interaction priority, visual feedback, and state transitions.
 
-### 3.2.5 Integrated evidence status
+### 3.2.6 Integrated evidence status
 
 The integrated documentation distinguishes three evidence levels:
 
