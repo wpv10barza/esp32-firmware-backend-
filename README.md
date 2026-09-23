@@ -270,6 +270,21 @@ V6 and V14.1 provide documentation and repository-level evidence. They must not 
 
 ## 3.3 Implementation
 
+### 3.3.1 Controlled implementation references
+
+The V14.1 consolidation preserves these exact implementation evidence markers for traceability:
+
+`st7701_type8_init_operations`
+
+`server/deviceApi.ts`
+
+`server/deviceCommands.ts`
+
+`server/reviewControl.ts`
+
+The references are documentary traceability markers. They are not instructions to modify source code.
+
+
 
 Pending controlled documentation section. This section is reserved for implementation evidence after the current 3.2 design documentation has been completed and verified.
 
@@ -288,36 +303,6 @@ Pending controlled documentation section. Commissioning remains outside the scop
 ### 3.5.1 Commissioning boundary
 
 No commissioning result is claimed by the present documentation consolidation. Any future commissioning record must be added under this hierarchy with dated and reproducible evidence.
-
-## 3.4 Validation
-
-Pending controlled documentation section. Validation results must be reported from actual evidence and must not be inferred from compilation, source inspection, or documentation alone.
-
-### 3.4.1 Evidence boundary
-
-Validation in this document remains an evidence boundary. Repository inspection and external WEB references are not substitutes for execution, automated test, physical display/touch operation, deployment, or other runtime evidence.
-
-## 3.5 Commissioning
-
-Pending controlled documentation section. Commissioning remains outside the scope of this README consolidation unless separately authorized and supported by execution evidence.
-
-### 3.5.1 Commissioning boundary
-
-No commissioning result is claimed by the present documentation consolidation. Any future commissioning record must be added under this hierarchy with dated and reproducible evidence.
-
-### 3.3.1 Controlled implementation references
-
-The V14.1 consolidation preserves these exact implementation evidence markers for traceability:
-
-`st7701_type8_init_operations`
-
-`server/deviceApi.ts`
-
-`server/deviceCommands.ts`
-
-`server/reviewControl.ts`
-
-The references are documentary traceability markers. They are not instructions to modify source code.
 
 ## 3.6 Final integrated documentation control
 
