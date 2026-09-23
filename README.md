@@ -10,7 +10,9 @@ The governing documentation sequence is:
 
 The integration rule is: preserve documented technical content, remove only direct duplication or obsolete version labels, and resolve differences by explicitly contrasting the two records. No technical statement is promoted from “documented” to “physically tested” unless execution evidence exists.
 
-## 0. Version integration and traceability
+## Version integration and traceability
+
+This preface is intentionally unnumbered. It records the relationship between V6, V14.1 and V15; the technical hierarchy of the consolidated record begins at Section 3.1.
 
 This README is the **single documentation record** obtained by integrating the V14.1 and V15 documentation versions. The V14.1 content is preserved as the design/evidence layer; V15 is the consolidation and control layer. The earlier V6 Benchmark baseline remains retained because it contains the complete initial-conditions record used by both versions.
 
@@ -61,13 +63,13 @@ When the two versions contain equivalent statements, the unified README keeps on
 
 Where a statement would imply a physical test, flashing event, deployment, or runtime result, the unified document keeps the more conservative evidence wording unless explicit execution evidence exists.
 
-## 1. V6 Benchmark — retained initial conditions
+## 3.1 Initial conditions and documentation scope
 
-## 1. Condiciones iniciales del sistema de desarrollo
+### 3.1.1 Condiciones iniciales del sistema de desarrollo
 
 El sistema de desarrollo comprende dos subsistemas obligatorios e inseparables para la operación del sistema T-030: el firmware del panel ESP32-S3-4848S040 y el backend Asistente 3C. Ambos subsistemas cumplen funciones complementarias. El firmware concentra la interacción física con el usuario, la representación visual, la captura de eventos táctiles y la comunicación con el servicio. El backend concentra la recepción de órdenes, su interpretación mediante inteligencia artificial, la validación determinista, el control de la revisión humana y la coordinación del acceso a la fuente maestra. La separación de responsabilidades permite mantener un control explícito sobre las operaciones que pueden modificar la información de mantenimiento.
 
-### 1.1 Plataforma electrónica - Subsistema firmware
+### 3.1.2 Plataforma electrónica - Subsistema firmware
 
 El sistema se desarrolló sobre un panel ESP32-S3-4848S040 configurado como objetivo específico de compilación dentro del entorno Arduino para microcontroladores Espressif. La configuración vigente establece una memoria Flash de 16 MB y el uso de PSRAM OPI. La interfaz de usuario trabaja con una resolución lógica de 480 × 480 píxeles y emplea una pantalla RGB asociada a un controlador ST7701S y un sistema táctil capacitivo basado en GT911. La representación gráfica se implementó mediante Arduino-GFX y la conectividad del dispositivo se estableció mediante Wi-Fi.
 
@@ -77,7 +79,7 @@ La gestión de órdenes utiliza un búfer de comandos con capacidad definida y m
 
 El dispositivo no ejecuta escritura directa sobre la fuente maestra. La función del firmware consiste en capturar la interacción, estructurar la orden, transmitirla al backend y presentar al usuario el estado de su procesamiento. De esta forma, la modificación de la información queda desacoplada del equipo embebido y se conserva una barrera lógica entre la interfaz física y la persistencia de datos.
 
-### 1.2 Plataforma backend Asistente 3C - Subsistema obligatorio
+### 3.1.3 Plataforma backend Asistente 3C - Subsistema obligatorio
 
 El subsistema backend se desarrolló como una aplicación web basada en Node.js, TypeScript y Express, complementada con una interfaz React ejecutada mediante Vite. La configuración vigente incorpora la biblioteca oficial de Google GenAI para realizar la interpretación estructurada de comandos. La aplicación utiliza variables de entorno para parámetros sensibles y de operación, evitando incorporar valores privados dentro del código versionado.
 
@@ -87,7 +89,7 @@ El control de acceso del dispositivo se realiza mediante un token configurado en
 
 La revisión humana se implementa mediante un mecanismo de propuestas con estados de propuesta, aprobación y rechazo. Cada propuesta identifica la fila que será revisada, los campos que se pretende modificar y el identificador de la orden que la originó cuando corresponde. Durante la revisión se mantiene un bloqueo temporal de la fila para impedir que otra propuesta concurrente modifique simultáneamente la misma posición lógica. El bloqueo expira después de un período definido, lo que evita mantener indefinidamente un recurso reservado.
 
-### 1.3 Interpretación, validación y control humano
+### 3.1.4 Interpretación, validación y control humano
 
 La interpretación de las órdenes se ejecuta mediante Google GenAI con una salida estructurada orientada a operaciones deterministas. El modelo no recibe autorización para modificar directamente la fuente maestra. Su función se limita a transformar el lenguaje natural en una estructura que contiene la tarea buscada, las operaciones solicitadas y una indicación de si la orden requiere revisión.
 
@@ -95,7 +97,7 @@ Después de la interpretación se ejecuta una etapa de validación determinista.
 
 La interfaz humana presenta una vista previa antes de efectuar cualquier escritura. La aplicación identifica de manera controlada la fila objetivo y muestra los cambios propuestos junto con sus valores resultantes. La escritura únicamente se habilita después de una acción explícita de confirmación. La acción de rechazo cierra la propuesta sin aplicar cambios y permite comunicar al panel que la orden no fue ejecutada.
 
-### 1.4 Fuente maestra y acceso a Google Sheets
+### 3.1.5 Fuente maestra y acceso a Google Sheets
 
 La fuente maestra se encuentra implementada en Google Sheets. El acceso desde la interfaz web se realiza mediante autenticación OAuth de Google y solicitudes HTTPS contra la API de Google Sheets. La aplicación obtiene la configuración de la hoja, verifica la estructura esperada, consulta los encabezados reales, identifica los catálogos necesarios y localiza la tarea antes de construir una propuesta de modificación.
 
@@ -103,7 +105,7 @@ La aplicación cliente ejecuta directamente las operaciones de lectura y escritu
 
 La versión actual no presenta dependencias del servicio Google Cloud Storage, de buckets ni de autenticación mediante una cuenta de servicio para la persistencia descrita. Tampoco se evidenció un backend basado en FastAPI o Flask. Por tanto, dichos componentes no se consideran condiciones iniciales de esta versión y no deben incorporarse a la descripción de las funcionalidades implementadas.
 
-### 1.5 Conexiones principales del sistema completo
+### 3.1.6 Conexiones principales del sistema completo
 
 La arquitectura electrónica considera la alimentación del panel, la interfaz de visualización RGB, el sistema táctil y los elementos auxiliares definidos para la variante física empleada. El detalle de las asignaciones eléctricas se reserva para el Anexo A. La interfaz lógica mantiene una resolución de 480 × 480 píxeles para la interacción y la presentación de estados.
 
@@ -111,7 +113,7 @@ La arquitectura lógica requiere conectividad de red entre el panel y el equipo 
 
 El acceso a la fuente maestra se realiza mediante HTTPS desde la interfaz web hacia los servicios de Google. La conexión entre el panel y el backend utiliza HTTP en la versión actual dentro de la infraestructura local. La diferencia entre ambos tramos debe conservarse en la descripción técnica, ya que representa una condición de seguridad distinta para cada segmento de comunicación.
 
-### 1.6 Condiciones de software del sistema completo
+### 3.1.7 Condiciones de software del sistema completo
 
 El entorno de desarrollo se configura sobre Ubuntu mediante WSL2. Para el firmware se requiere un entorno compatible con PlatformIO, Arduino y las dependencias gráficas definidas para el panel. Para el backend se requiere Node.js, npm y el conjunto de dependencias declarado por el proyecto, incluyendo TypeScript, Express, Vite, React, Google GenAI y el mecanismo de autenticación OAuth utilizado por la interfaz.
 
@@ -119,7 +121,7 @@ La configuración local del firmware debe definir los parámetros de red, la dir
 
 La ejecución del sistema completo requiere que firmware y backend estén configurados de manera compatible. Una discrepancia en la dirección del servicio, el token, la configuración de Google o los parámetros de la hoja impide que el flujo alcance la etapa de actualización. La condición inicial, por tanto, no se limita a disponer de los dos repositorios, sino que exige coherencia entre sus parámetros de comunicación y operación.
 
-### 1.7 Condiciones de red e infraestructura
+### 3.1.8 Condiciones de red e infraestructura
 
 La infraestructura mínima requiere una red Wi-Fi con capacidad para establecer comunicación LAN entre el panel y el equipo que ejecuta el backend. Cuando el desarrollo se realiza mediante WSL2, la modalidad de red y las reglas de exposición del sistema anfitrión deben permitir que el dispositivo físico alcance el servicio. La dirección efectiva utilizada por el firmware debe corresponder a una interfaz accesible desde el panel.
 
@@ -127,7 +129,7 @@ El equipo de desarrollo debe disponer de conectividad hacia los servicios extern
 
 La disponibilidad de la infraestructura debe verificarse antes de considerar operativo el flujo. El estado disponible del backend, la correcta autenticación del dispositivo, la autenticación de la cuenta de Google y la accesibilidad de la hoja constituyen comprobaciones independientes. El fallo de cualquiera de estas condiciones interrumpe el procesamiento de una orden antes de su aplicación.
 
-### 1.8 Condiciones de seguridad
+### 3.1.9 Condiciones de seguridad
 
 Las credenciales de red, los tokens de autenticación, las claves de Google GenAI y los parámetros sensibles de acceso deben mantenerse fuera del control de versiones. La configuración local de cada subsistema se utiliza como mecanismo de separación entre el código reproducible y los valores propios del entorno de ejecución. Esta separación es obligatoria para evitar que información sensible quede incorporada en el repositorio.
 
@@ -135,7 +137,7 @@ La comunicación entre firmware y backend se ejecuta mediante HTTP local en la v
 
 La confirmación humana se mantiene como barrera previa a la persistencia. La recepción, interpretación o validación de una orden no implica autorización automática de escritura. Esta condición constituye un control funcional y de seguridad del sistema, ya que separa la propuesta generada por inteligencia artificial de la modificación efectiva de la información maestra.
 
-### 1.9 Flujo de datos del sistema completo como condición inicial
+### 3.1.10 Flujo de datos del sistema completo como condición inicial
 
 El flujo mínimo comienza con una interacción del usuario en el panel ESP32-S3-4848S040. El firmware transforma la interacción en una orden y la transmite al backend mediante la red local. El backend valida la autenticación del dispositivo, registra la orden y conserva su identificador para mantener el control de duplicados.
 
@@ -145,21 +147,21 @@ La propuesta se presenta a la persona responsable mediante la interfaz de revisi
 
 Una vez concluido el proceso, el resultado se comunica al backend y, cuando la orden fue originada en el panel, el estado se reporta nuevamente al dispositivo. El panel presenta el resultado mediante sus estados de operación. De esta manera, el flujo completo mantiene separados la captura, el procesamiento de inteligencia artificial, la validación determinista, la aprobación humana y la persistencia.
 
-### 1.10 Componentes no establecidos como condición inicial
+### 3.1.11 Componentes no establecidos como condición inicial
 
 La inspección de la implementación vigente no evidenció una arquitectura de persistencia basada en Google Cloud Storage para el flujo 3C descrito. Tampoco se evidenció un servicio Python basado en FastAPI o Flask dentro del backend actualmente integrado. Por tanto, esos componentes no se incorporan como dependencias ni como funcionalidades implementadas de la versión V6.
 
 La documentación tampoco atribuye al firmware una función de escritura directa sobre Google Sheets, debido a que la persistencia efectiva se realiza en la interfaz autenticada. Esta diferenciación evita confundir el canal de transporte del dispositivo con el mecanismo de actualización de la fuente maestra y preserva la separación funcional entre el sistema embebido y la aplicación web.
 
-### 1.11 Resumen de condiciones iniciales mínimas obligatorias
+### 3.1.12 Resumen de condiciones iniciales mínimas obligatorias
 
 El sistema completo T-030 requiere como mínimo la operación conjunta del firmware ESP32-S3-4848S040 y del backend Asistente 3C. El primer subsistema proporciona la interacción física, la representación visual, la edición de comandos, la conectividad y el seguimiento del estado. El segundo proporciona la recepción de órdenes, la autenticación del dispositivo, la interpretación mediante Google GenAI, la validación determinista, la gestión de propuestas y el control de la revisión humana.
 
 La interfaz web autenticada constituye el componente que coordina la consulta y la actualización de Google Sheets dentro del flujo vigente. La disponibilidad de red, la autenticación, la configuración de Google, la estructura esperada de la hoja y la coherencia de los parámetros entre subsistemas son condiciones necesarias para completar una operación. La ausencia de cualquiera de los elementos esenciales impide considerar operativo el flujo completo.
 
-## 2. V6 editorial/control criterion — retained
+### 3.1.13 Criterio editorial y de control V6
 
-## Criterio de redacción
+### 3.1.14 Criterio de redacción y fuentes de la línea base
 
 La documentación principal del repositorio se mantiene en tercera persona y mediante párrafos técnicos. Los detalles de implementación de bajo nivel, código fuente, comandos de instalación, asignaciones de pines, direcciones concretas, procedimientos de diagnóstico y configuraciones sensibles se reservan para los anexos y documentos técnicos correspondientes.
 
@@ -167,7 +169,7 @@ Fuentes verificadas en la versión V6: configuración vigente del firmware, impl
 
 Versión V6 Benchmark - Sistema completo obligatorio - Firmware + Backend - Sin componentes no evidenciados
 
-## 3.2 V14.1 Design expansion
+### V14.1 Design expansion
 
 ## 3.2 Design of the system
 
@@ -246,11 +248,11 @@ The required software evidence markers for the V14.1 record are preserved explic
 
 `server/deviceApi.ts` is retained as the device API evidence reference; `server/deviceCommands.ts` as the command normalization/state reference; and `server/reviewControl.ts` as the human-review control reference. The README records these as implementation evidence markers and does not modify their contents as part of this documentation consolidation.
 
-## 3.2.3 Tactile interface design
+### 3.2.3 Tactile interface design
 
 Pending controlled documentation section. It is reserved for the tactile interaction design of the ESP32-S3-4848S040 panel, including the documented touch-controller interface, interaction regions, priority rules, cursor interaction, keyboard behavior, and touch-hit testing once the corresponding evidence is consolidated.
 
-## 3.2.4 Tactile treatment
+### 3.2.4 Tactile treatment
 
 Pending controlled documentation section. It is reserved for the documented treatment of tactile events, debouncing or event filtering where evidenced, interaction priority, visual feedback, and state transitions.
 
@@ -258,15 +260,23 @@ Pending controlled documentation section. It is reserved for the documented trea
 
 Pending controlled documentation section. This section is reserved for implementation evidence after the current 3.2 design documentation has been completed and verified.
 
-## 4. Validation
+## 3.4 Validation
 
 Pending controlled documentation section. Validation results must be reported from actual evidence and must not be inferred from compilation, source inspection, or documentation alone.
 
-## 5. Commissioning
+### 3.4.1 Evidence boundary
+
+Validation in this document remains an evidence boundary. Repository inspection and external WEB references are not substitutes for execution, automated test, physical display/touch operation, deployment, or other runtime evidence.
+
+## 3.5 Commissioning
 
 Pending controlled documentation section. Commissioning remains outside the scope of this README consolidation unless separately authorized and supported by execution evidence.
 
-## Controlled implementation references
+### 3.5.1 Commissioning boundary
+
+No commissioning result is claimed by the present documentation consolidation. Any future commissioning record must be added under this hierarchy with dated and reproducible evidence.
+
+### 3.3.1 Controlled implementation references
 
 The V14.1 consolidation preserves these exact implementation evidence markers for traceability:
 
@@ -280,7 +290,7 @@ The V14.1 consolidation preserves these exact implementation evidence markers fo
 
 The references are documentary traceability markers. They are not instructions to modify source code.
 
-## 3.2.5 Integrated evidence status
+### 3.2.5 Integrated evidence status
 
 The integrated documentation distinguishes three evidence levels:
 
@@ -290,7 +300,7 @@ The integrated documentation distinguishes three evidence levels:
 
 V6 and V14.1 provide documentation and repository-level evidence. They must not be interpreted as execution evidence unless an explicit test record exists.
 
-## Final integrated control principle
+## 3.6 Final integrated documentation control
 
 This README is one documentation set containing the V6 Benchmark baseline, the preserved V14.1 design/evidence record, and the V15 consolidation/control layer.
 
