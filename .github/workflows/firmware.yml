@@ -1,0 +1,41 @@
+name: ESP32 Firmware Backend
+
+on:
+  push:
+    branches: [main, "port/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.18
+      - name: Run native tests
+        run: pio test --environment native
+      - name: Verify 480x480 touch action zones
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude             test/touch_priority_dispatch_test.cpp             -o /tmp/test_touch_priority_dispatch
+          /tmp/test_touch_priority_dispatch
+
+  compile:
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install platformio==6.1.18
+      - name: Compile ESP32-S3 4848S040
+        run: pio run --environment panel_4848s040

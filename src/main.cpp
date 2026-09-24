@@ -13,7 +13,7 @@
 #include "app_config.h"
 #include "command_buffer.h"
 #include "command_text_viewport.h"
-#include "virtual_keyboard.h"
+#include "virtual_keyboard.h"\n#include "touch_priority_dispatch.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -680,10 +680,12 @@ void handleTouch() {
           drawEditor();
         }
       }
-    } else if (sample.y >= 350) {
-      if (sample.x < 240) {
+    } else {
+      const auto action = touch_priority_dispatch::route(
+          true, static_cast<int>(sample.x), static_cast<int>(sample.y), false);
+      if (action == touch_priority_dispatch::Route::ProbeWsl) {
         checkBackendHealth();
-      } else {
+      } else if (action == touch_priority_dispatch::Route::Send3C) {
         commandEditorOpen = true;
         keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
         drawEditor();
