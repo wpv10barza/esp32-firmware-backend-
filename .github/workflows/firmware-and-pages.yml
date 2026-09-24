@@ -43,6 +43,9 @@ jobs:
       - name: Test Wi-Fi source contract
         run: python tests/test_wifi_source.py
 
+      - name: Test Wi-Fi target scan contract
+        run: python tests/test_wifi_target_scan_contract.py
+
       - name: Test backend discovery contract
         run: python tests/test_backend_discovery.py
 
