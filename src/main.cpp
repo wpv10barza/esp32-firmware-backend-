@@ -865,6 +865,43 @@ void wifiEventHandler(WiFiEvent_t event, WiFiEventInfo_t info) {
   }
 }
 
+void logConfiguredWifiScan() {
+  Serial.printf("Wi-Fi: escaneando SSID objetivo=\"%s\"\\n",
+    app_config::wifiSsid);
+
+  const int networks = WiFi.scanNetworks();
+  if (networks < 0) {
+    Serial.printf("Wi-Fi: scan failed status=%d (%s)\\n",
+      networks, wifiStatusLabel(WiFi.status()));
+    return;
+  }
+
+  bool targetFound = false;
+  Serial.printf("Wi-Fi: %d redes encontradas\\n", networks);
+
+  for (int index = 0; index < networks; ++index) {
+    const String ssid = WiFi.SSID(index);
+    const int32_t rssi = WiFi.RSSI(index);
+    Serial.printf("  Wi-Fi[%d] SSID=\"%s\" RSSI=%d\\n",
+      index, ssid.c_str(), static_cast<int>(rssi));
+
+    if (ssid == app_config::wifiSsid) {
+      targetFound = true;
+      Serial.printf(
+        "Wi-Fi: SSID objetivo encontrado: \"%s\" RSSI=%d dBm\\n",
+        app_config::wifiSsid, static_cast<int>(rssi));
+    }
+  }
+
+  if (!targetFound) {
+    Serial.printf(
+      "Wi-Fi: ERROR SSID objetivo \"%s\" no aparece en el escaneo\\n",
+      app_config::wifiSsid);
+  }
+
+  WiFi.scanDelete();
+}
+
 void configureWifi() {
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
