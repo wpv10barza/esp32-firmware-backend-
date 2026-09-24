@@ -33,7 +33,7 @@ require(MAIN, "MDNS.port(index)", "discovered backend port")
 
 
 # Required NVS cache path.
-require(MAIN, "backendPrefs.getString(kBackendHostKey, kBackendLogicalHost)", "NVS logical host load")
+require(MAIN, "kBackendHostKey, kBackendLogicalHost", "NVS logical host load")
 require(MAIN, "backendPrefs.getString(kBackendAddressKey, \"\")", "NVS address load")
 require(MAIN, "backendPrefs.getUShort(kBackendPortKey, 0)", "NVS port load")
 require(MAIN, "backendPrefs.putString(kBackendHostKey, endpointValue.logicalHost)", "NVS logical host save")
