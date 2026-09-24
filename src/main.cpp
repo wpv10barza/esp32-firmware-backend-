@@ -14,6 +14,7 @@
 #include "app_config.h"
 #include "command_buffer.h"
 #include "command_text_viewport.h"
+#include "panel_style.h"
 #include "virtual_keyboard.h"
 
 namespace pins {
@@ -165,25 +166,33 @@ void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
 void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
   if (!displayReady) return;
   display->fillRoundRect(x, y, width, height, 16, fill);
-  display->drawRoundRect(x, y, width, height, 16, color565(185, 210, 230));
-  display->setTextSize(2);
+  display->drawRoundRect(x, y, width, height, panel_style::buttonRadius,
+                       color565(panel_style::buttonBorder.r, panel_style::buttonBorder.g,
+                                panel_style::buttonBorder.b));
+  display->setTextSize(panel_style::keyTextSize);
   int16_t x1 = 0;
   int16_t y1 = 0;
   uint16_t textWidth = 0;
   uint16_t textHeight = 0;
   display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
-  display->setTextColor(WHITE);
+  display->setTextColor(color565(panel_style::text.r, panel_style::text.g,
+                                    panel_style::text.b));
   display->setCursor(x + (width - textWidth) / 2, y + (height - textHeight) / 2);
   display->print(label);
 }
 
 void drawEditor() {
   if (!displayReady) return;
-  display->fillScreen(color565(8, 18, 30));
-  drawCentered("EDITAR ORDEN 3C", 10, 2, color565(170, 220, 255));
-  display->drawRect(8, 42, 464, 72, color565(185, 210, 230));
-  display->setTextSize(2);
-  display->setTextColor(WHITE);
+  display->fillScreen(color565(panel_style::background.r, panel_style::background.g,
+                              panel_style::background.b));
+  drawCentered("EDITAR ORDEN 3C", 10, panel_style::titleTextSize,
+               color565(panel_style::title.r, panel_style::title.g, panel_style::title.b));
+  display->drawRect(8, 42, 464, 72,
+                    color565(panel_style::fieldBorder.r, panel_style::fieldBorder.g,
+                             panel_style::fieldBorder.b));
+  display->setTextSize(panel_style::keyTextSize);
+  display->setTextColor(color565(panel_style::text.r, panel_style::text.g,
+                                  panel_style::text.b));
 
   uint16_t prefixWidths[kCommandCapacity + 1] = {};
   String full(commandBuffer.c_str());
@@ -198,22 +207,30 @@ void drawEditor() {
   display->setCursor(15, 68);
   display->print(visible);
   const int cursorX = 15 + window.cursorX;
-  display->drawFastVLine(cursorX, 57, 28, color565(80, 220, 160));
+  display->drawFastVLine(cursorX, 57, 28,
+                         color565(panel_style::accent.r, panel_style::accent.g,
+                                  panel_style::accent.b));
 
   virtual_keyboard::Key keys[50]{};
   const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
   for (size_t i = 0; i < count; ++i) {
     const auto& key = keys[i];
     const auto fill = key.definition.kind == virtual_keyboard::KeyKind::Enter
-        ? color565(18, 105, 73) : color565(25, 45, 65);
+        ? color565(panel_style::enterFill.r, panel_style::enterFill.g, panel_style::enterFill.b)
+        : color565(panel_style::keyFill.r, panel_style::keyFill.g, panel_style::keyFill.b);
     display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
                            key.rect.bottom - key.rect.top, 7, fill);
     display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 7, color565(130, 160, 180));
-    display->setTextSize(key.definition.label[0] && strlen(key.definition.label) > 2 ? 1 : 2);
+                           key.rect.bottom - key.rect.top, panel_style::keyRadius,
+                           color565(panel_style::keyBorder.r, panel_style::keyBorder.g,
+                                    panel_style::keyBorder.b));
+    display->setTextSize(key.definition.label[0] && strlen(key.definition.label) > 2
+                           ? panel_style::secondaryTextSize
+                           : panel_style::keyTextSize);
     int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
     display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
-    display->setTextColor(WHITE);
+    display->setTextColor(color565(panel_style::text.r, panel_style::text.g,
+                                    panel_style::text.b));
     display->setCursor(key.rect.left + ((key.rect.right-key.rect.left)-w)/2,
                        key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
     display->print(key.definition.label);
@@ -230,9 +247,12 @@ void drawPanel() {
   if (commandEditorOpen) { drawEditor(); return; }
   if (!displayReady) return;
   const uint16_t background = stateBackground(panelState);
-  const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
+  const uint16_t eye = panelState == PanelState::Offline
+      ? color565(panel_style::secondary.r, panel_style::secondary.g, panel_style::secondary.b)
+      : color565(panel_style::text.r, panel_style::text.g, panel_style::text.b);
   display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
+  drawCentered("Interfaz Portátil", 18, panel_style::titleTextSize,
+               color565(panel_style::title.r, panel_style::title.g, panel_style::title.b));
 
   if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
     display->drawLine(112, 105, 172, 165, eye);
@@ -254,16 +274,25 @@ void drawPanel() {
     display->fillCircle(338, 141, 13, background);
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
+  drawCentered(stateLabel(panelState), 250, panel_style::keyTextSize,
+               color565(panel_style::text.r, panel_style::text.g, panel_style::text.b));
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
+  drawCentered(detail, 286, panel_style::secondaryTextSize,
+               color565(panel_style::secondary.r, panel_style::secondary.g,
+                        panel_style::secondary.b));
   if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
+    drawCentered(WiFi.localIP().toString(), 310, panel_style::secondaryTextSize,
+                 color565(panel_style::title.r, panel_style::title.g,
+                          panel_style::title.b));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(panel_style::fieldBorder.r,
+                                                          panel_style::fieldBorder.g,
+                                                          panel_style::fieldBorder.b));
+  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(panel_style::enterFill.r,
+                                                           panel_style::enterFill.g,
+                                                           panel_style::enterFill.b));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
