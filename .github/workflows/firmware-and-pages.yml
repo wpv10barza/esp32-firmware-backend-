@@ -129,6 +129,8 @@ jobs:
           set -euo pipefail
           mkdir -p .ci/bin
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude tests/test_command_buffer_native.cpp -o .ci/bin/command_buffer_native
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/editor_transition_test.cpp -o .ci/bin/editor_transition_test
+          .ci/bin/editor_transition_test
           .ci/bin/command_buffer_native
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/command_text_viewport_test.cpp -o .ci/bin/command_text_viewport_test
           .ci/bin/command_text_viewport_test
