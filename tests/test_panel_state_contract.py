@@ -13,7 +13,7 @@ def require(text: str, needle: str) -> None:
 require(MAIN, 'updatePanel(PanelState::Error, message, true);')
 require(MAIN, 'setTransportError("POST", code, lastBackendMessage, true);')
 require(MAIN, 'setTransportError("POLL", code, body, true);')
-require(MAIN, 'Serial.printf("[ERROR] health HTTP=%d detail=%s\\n", code, lastBackendMessage.c_str());')
+require(MAIN, 'Serial.printf("[ERROR] health HTTP=%d endpoint=%s detail=%s\\n",')
 
 # POST 200/202 is only valid when the backend actually returned a command_id.
 require(MAIN, 'if (!lastCommandId.length()) {')
