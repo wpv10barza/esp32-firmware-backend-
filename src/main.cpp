@@ -839,11 +839,38 @@ const char* wifiStatusLabel(wl_status_t status) {
   }
 }
 
+void wifiEventHandler(WiFiEvent_t event, WiFiEventInfo_t info) {
+  switch (event) {
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      Serial.printf("Wi-Fi STA conectado: SSID=\"%s\"\n", app_config::wifiSsid);
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      Serial.printf(
+        "Wi-Fi STA desconectado: SSID=\"%s\" reason=%u\n",
+        app_config::wifiSsid,
+        static_cast<unsigned>(info.wifi_sta_disconnected.reason));
+      break;
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      Serial.printf(
+        "Wi-Fi GOT_IP: ip=%s gateway=%s rssi=%d\n",
+        WiFi.localIP().toString().c_str(),
+        WiFi.gatewayIP().toString().c_str(),
+        WiFi.RSSI());
+      break;
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+      Serial.println("Wi-Fi LOST_IP");
+      break;
+    default:
+      break;
+  }
+}
+
 void configureWifi() {
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(app_config::deviceId);
+  WiFi.onEvent(wifiEventHandler);
 }
 
 void connectWifi() {
