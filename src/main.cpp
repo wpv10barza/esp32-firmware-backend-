@@ -880,8 +880,10 @@ void connectWifi() {
     return;
   }
   configureWifi();
-  Serial.printf("Wi-Fi: iniciando STA, credenciales presentes, status=%d (%s)\n",
-    static_cast<int>(WiFi.status()), wifiStatusLabel(WiFi.status()));
+  Serial.printf("Wi-Fi: objetivo SSID=\"%s\" status=%d (%s)\n",
+    app_config::wifiSsid,
+    static_cast<int>(WiFi.status()),
+    wifiStatusLabel(WiFi.status()));
   WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
   lastWifiAttempt = millis();
   updatePanel(PanelState::Busy, "Conectando Wi-Fi");
