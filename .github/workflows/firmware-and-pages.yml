@@ -43,6 +43,9 @@ jobs:
       - name: Test Wi-Fi source contract
         run: python tests/test_wifi_source.py
 
+      - name: Test backend discovery contract
+        run: python tests/test_backend_discovery.py
+
       - name: Test panel E2E state contract
         run: python tests/test_panel_state_contract.py
 
