@@ -30,7 +30,7 @@ require(MAIN, "void beginWifiConnection(", "single Wi-Fi begin path")
 require(MAIN, "void serviceWifi()", "centralized Wi-Fi recovery")
 require(MAIN, "WL_NO_SSID_AVAIL", "missing-AP handling")
 require(MAIN, "WL_CONNECTION_LOST", "connection-loss handling")
-require(MAIN, 'updatePanel(PanelState::Offline,\n      "Esperando Wi-Fi")', "offline recovery state")
+require(MAIN, 'updatePanel(\n      PanelState::Offline,\n      "Esperando Wi-Fi")', "offline recovery state")
 
 # Never use the old reconnect/disconnect hammering strategy.
 if "WiFi.reconnect(" in MAIN:
