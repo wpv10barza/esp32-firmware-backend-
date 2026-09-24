@@ -18,7 +18,7 @@ if "BACKEND_IP" in MAIN:
 if "assistantBaseUrl" in MAIN:
     raise AssertionError("runtime endpoint must not use assistantBaseUrl")
 for source_name, source in [("main.cpp", MAIN), ("app_config.h", CONFIG)]:
-    private_ips = re.findall(r"192\\.168\\.\\d+\\.\\d+", source)
+    private_ips = re.findall(r"192\.168\.\d+\.\d+", source)
     if private_ips:
         raise AssertionError(f"fixed private IP remains in {source}: {private_ips}")
 
