@@ -34,6 +34,10 @@ if "WiFi.disconnect();" in MAIN:
 require(MAIN, "wifiStatusLabel", "Wi-Fi status diagnostic")
 require(MAIN, "WiFi.gatewayIP().toString()", "gateway diagnostic")
 require(MAIN, "WiFi.RSSI()", "RSSI diagnostic")
+require(MAIN, "WiFi.onEvent(wifiEventHandler);", "Wi-Fi event diagnostics registration")
+require(MAIN, "ARDUINO_EVENT_WIFI_STA_DISCONNECTED", "STA disconnect event diagnostics")
+require(MAIN, "info.wifi_sta_disconnected.reason", "STA disconnect reason diagnostic")
+require(MAIN, "ARDUINO_EVENT_WIFI_STA_GOT_IP", "STA IP acquisition event diagnostics")
 require(MAIN, "GET health ->", "backend health diagnostic")
 require(MAIN, "Wi-Fi listo:", "Wi-Fi acquisition diagnostic")
 
