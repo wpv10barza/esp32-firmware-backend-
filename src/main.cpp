@@ -64,24 +64,28 @@ bool mdnsReady = false;
 bool wifiAnnounced = false;
 
 struct BackendEndpoint {
-  String host;
+  String logicalHost;
+  String address;
   uint16_t port = 0;
 
   bool valid() const {
-    return host.length() > 0 && port > 0;
+    return logicalHost.length() > 0 && address.length() > 0 && port > 0;
   }
 
   String baseUrl() const {
-    return valid() ? String("http://") + host + ":" + String(port) : String();
+    return valid() ? String("http://") + address + ":" + String(port) : String();
   }
 
   void clear() {
-    host = "";
+    logicalHost = "";
+    address = "";
     port = 0;
   }
 
   bool operator==(const BackendEndpoint& other) const {
-    return host == other.host && port == other.port;
+    return logicalHost == other.logicalHost &&
+           address == other.address &&
+           port == other.port;
   }
 
   bool operator!=(const BackendEndpoint& other) const {
@@ -92,7 +96,9 @@ struct BackendEndpoint {
 Preferences backendPrefs;
 BackendEndpoint backendEndpoint;
 constexpr char kBackendPrefsNamespace[] = "backend";
+constexpr char kBackendLogicalHost[] = "3c-backend.local";
 constexpr char kBackendHostKey[] = "host";
+constexpr char kBackendAddressKey[] = "addr";
 constexpr char kBackendPortKey[] = "port";
 constexpr char kBackendMdnsService[] = "3c";
 constexpr char kBackendMdnsProtocol[] = "tcp";
@@ -442,13 +448,18 @@ void loadBackendEndpointFromNvs() {
     return;
   }
 
-  backendEndpoint.host = backendPrefs.getString(kBackendHostKey, "");
+  backendEndpoint.logicalHost = backendPrefs.getString(
+    kBackendHostKey, kBackendLogicalHost);
+  backendEndpoint.address = backendPrefs.getString(kBackendAddressKey, "");
   backendEndpoint.port = backendPrefs.getUShort(kBackendPortKey, 0);
   backendPrefs.end();
 
-  if (backendEndpoint.valid()) {
-    Serial.printf("BACKEND: cached endpoint loaded %s:%u\n",
-      backendEndpoint.host.c_str(), backendEndpoint.port);
+  if (backendEndpoint.valid() &&
+      backendEndpoint.logicalHost.equalsIgnoreCase(kBackendLogicalHost)) {
+    Serial.printf("BACKEND: cached endpoint loaded %s -> %s:%u\n",
+      backendEndpoint.logicalHost.c_str(),
+      backendEndpoint.address.c_str(),
+      backendEndpoint.port);
   } else {
     backendEndpoint.clear();
     Serial.println("BACKEND: no valid cached endpoint; mDNS discovery required");
@@ -461,11 +472,14 @@ void saveBackendEndpointToNvs(const BackendEndpoint& endpointValue) {
     Serial.println("BACKEND: unable to open NVS cache for write");
     return;
   }
-  backendPrefs.putString(kBackendHostKey, endpointValue.host);
+  backendPrefs.putString(kBackendHostKey, endpointValue.logicalHost);
+  backendPrefs.putString(kBackendAddressKey, endpointValue.address);
   backendPrefs.putUShort(kBackendPortKey, endpointValue.port);
   backendPrefs.end();
-  Serial.printf("BACKEND: cached endpoint saved %s:%u\n",
-    endpointValue.host.c_str(), endpointValue.port);
+  Serial.printf("BACKEND: cached endpoint saved %s -> %s:%u\n",
+    endpointValue.logicalHost.c_str(),
+    endpointValue.address.c_str(),
+    endpointValue.port);
 }
 
 bool startMdns() {
@@ -494,12 +508,26 @@ bool discoverBackendEndpoint() {
   }
 
   for (int index = 0; index < services; ++index) {
-    const IPAddress address = MDNS.IP(index);
+    String logicalHost = MDNS.hostname(index);
+    logicalHost.trim();
+    while (logicalHost.endsWith(".")) logicalHost.remove(logicalHost.length() - 1);
+    if (!logicalHost.endsWith(".local")) logicalHost += ".local";
+
+    const IPAddress address = MDNS.address(index);
     const uint16_t port = MDNS.port(index);
-    if (port == 0) continue;
+    if (port == 0 || address == IPAddress()) continue;
+
+    Serial.printf(
+      "BACKEND: mDNS candidate host=%s address=%s port=%u\n",
+      logicalHost.c_str(), address.toString().c_str(), port);
+
+    if (!logicalHost.equalsIgnoreCase(kBackendLogicalHost)) {
+      continue;
+    }
 
     BackendEndpoint discovered;
-    discovered.host = address.toString();
+    discovered.logicalHost = kBackendLogicalHost;
+    discovered.address = address.toString();
     discovered.port = port;
     if (!discovered.valid()) continue;
 
@@ -507,13 +535,17 @@ bool discoverBackendEndpoint() {
     backendEndpoint = discovered;
     if (changed) saveBackendEndpointToNvs(backendEndpoint);
 
-    Serial.printf("BACKEND: mDNS discovered endpoint %s:%u%s\n",
-      backendEndpoint.host.c_str(), backendEndpoint.port,
+    Serial.printf("BACKEND: mDNS discovered %s -> %s:%u%s\n",
+      backendEndpoint.logicalHost.c_str(),
+      backendEndpoint.address.c_str(),
+      backendEndpoint.port,
       changed ? " (cache updated)" : " (cache unchanged)");
     return true;
   }
 
-  Serial.println("BACKEND: mDNS returned services without a usable endpoint");
+  Serial.printf(
+    "BACKEND: mDNS _%s._%s did not return logical host %s\n",
+    kBackendMdnsService, kBackendMdnsProtocol, kBackendLogicalHost);
   return false;
 }
 
