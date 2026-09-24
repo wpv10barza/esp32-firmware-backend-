@@ -49,6 +49,9 @@ jobs:
       - name: Test panel E2E state contract
         run: python tests/test_panel_state_contract.py
 
+      - name: Test Guition UI style and partial redraw contract
+        run: python test/guition_ui_style_contract.py
+
       - name: Test runtime command editor integration
         run: python tests/test_command_editor_integration.py
 
