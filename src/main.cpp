@@ -551,7 +551,11 @@ bool discoverBackendEndpoint() {
     while (logicalHost.endsWith(".")) logicalHost.remove(logicalHost.length() - 1);
     if (!logicalHost.endsWith(".local")) logicalHost += ".local";
 
-    const IPAddress address = MDNS.address(index);
+    String hostForQuery = logicalHost;
+    if (hostForQuery.endsWith(".local")) {
+      hostForQuery.remove(hostForQuery.length() - 6);
+    }
+    const IPAddress address = MDNS.queryHost(hostForQuery.c_str(), 2000);
     const uint16_t port = MDNS.port(index);
     if (port == 0 || address == IPAddress()) continue;
 
