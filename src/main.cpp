@@ -13,6 +13,8 @@
 #include "app_config.h"
 #include "command_buffer.h"
 #include "command_text_viewport.h"
+#include "guition_monitor_theme.h"
+#include "panel_ui_geometry.h"
 #include "virtual_keyboard.h"
 
 namespace pins {
@@ -31,8 +33,8 @@ namespace {
 constexpr uint8_t kTouchAddress = 0x5D;
 constexpr uint16_t kTouchStatusRegister = 0x814E;
 constexpr uint16_t kTouchPointRegister = 0x814F;
-constexpr int kScreenWidth = 480;
-constexpr int kScreenHeight = 480;
+constexpr int kScreenWidth = panel_ui_geometry::kScreenWidth;
+constexpr int kScreenHeight = panel_ui_geometry::kScreenHeight;
 
 WebServer web(80);
 Arduino_ESP32SPI* displayBus = nullptr;
@@ -78,6 +80,10 @@ uint16_t color565(uint8_t red, uint8_t green, uint8_t blue) {
   return display ? display->color565(red, green, blue) : 0;
 }
 
+uint16_t themeColor(const guition_monitor_theme::Rgb& rgb) {
+  return color565(rgb.r, rgb.g, rgb.b);
+}
+
 const char* stateLabel(PanelState state) {
   switch (state) {
     case PanelState::Booting: return "INICIANDO";
@@ -93,17 +99,18 @@ const char* stateLabel(PanelState state) {
 }
 
 uint16_t stateBackground(PanelState state) {
+  using namespace guition_monitor_theme;
   switch (state) {
-    case PanelState::Ready: return color565(5, 45, 27);
-    case PanelState::Busy: return color565(8, 28, 58);
-    case PanelState::Pending: return color565(68, 43, 2);
-    case PanelState::Applied: return color565(2, 65, 28);
-    case PanelState::Rejected: return color565(62, 29, 3);
-    case PanelState::Error: return color565(65, 5, 9);
-    case PanelState::Offline: return color565(18, 22, 30);
-    case PanelState::Booting: return color565(10, 18, 38);
+    case PanelState::Ready: return themeColor(kBackground);
+    case PanelState::Busy: return themeColor(kSteelBlue);
+    case PanelState::Pending: return color565(62, 54, 18);
+    case PanelState::Applied: return color565(18, 58, 48);
+    case PanelState::Rejected: return color565(82, 34, 48);
+    case PanelState::Error: return color565(72, 24, 40);
+    case PanelState::Offline: return color565(28, 30, 40);
+    case PanelState::Booting: return themeColor(kBackground);
   }
-  return 0;
+  return themeColor(kBackground);
 }
 
 void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
@@ -123,15 +130,21 @@ void drawCentered(const String& text, int y, uint8_t size, uint16_t color) {
 
 void drawButton(int x, int y, int width, int height, const char* label, uint16_t fill) {
   if (!displayReady) return;
+  if (x < 0 || y < 0 || width <= 0 || height <= 0 ||
+      x + width > kScreenWidth || y + height > kScreenHeight) {
+    Serial.printf("[UI] rejected out-of-bounds button '%s' at %d,%d %dx%d\\n",
+                  label, x, y, width, height);
+    return;
+  }
   display->fillRoundRect(x, y, width, height, 16, fill);
-  display->drawRoundRect(x, y, width, height, 16, color565(185, 210, 230));
+  display->drawRoundRect(x, y, width, height, 16, themeColor(guition_monitor_theme::kSteelBlue));
   display->setTextSize(2);
   int16_t x1 = 0;
   int16_t y1 = 0;
   uint16_t textWidth = 0;
   uint16_t textHeight = 0;
   display->getTextBounds(label, 0, 0, &x1, &y1, &textWidth, &textHeight);
-  display->setTextColor(WHITE);
+  display->setTextColor(themeColor(guition_monitor_theme::kWhite));
   display->setCursor(x + (width - textWidth) / 2, y + (height - textHeight) / 2);
   display->print(label);
 }
@@ -191,7 +204,7 @@ void drawPanel() {
   const uint16_t background = stateBackground(panelState);
   const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
   display->fillScreen(background);
-  drawCentered("Interfaz Portátil", 18, 2, color565(170, 220, 255));
+  drawCentered("INTERFAZ PORTATIL", 18, 2, themeColor(guition_monitor_theme::kWhite));
 
   if (panelState == PanelState::Error || panelState == PanelState::Rejected) {
     display->drawLine(112, 105, 172, 165, eye);
@@ -213,16 +226,20 @@ void drawPanel() {
     display->fillCircle(338, 141, 13, background);
   }
 
-  drawCentered(stateLabel(panelState), 250, 2, WHITE);
+  drawCentered(stateLabel(panelState), 250, 2, themeColor(guition_monitor_theme::kWhite));
   String detail = panelDetail;
   if (detail.length() > 52) detail = detail.substring(0, 49) + "...";
-  drawCentered(detail, 286, 1, color565(210, 225, 235));
+  drawCentered(detail, 286, 1, themeColor(guition_monitor_theme::kMistyBlue));
   if (WiFi.status() == WL_CONNECTED) {
-    drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
+    drawCentered(WiFi.localIP().toString(), 310, 1, themeColor(guition_monitor_theme::kSkyBlue));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
-  drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
+  drawButton(panel_ui_geometry::kProbeWslButton.left, panel_ui_geometry::kProbeWslButton.top,
+             panel_ui_geometry::kProbeWslButton.width(), panel_ui_geometry::kProbeWslButton.height(),
+             "PROBAR WSL", themeColor(guition_monitor_theme::kSkyBlue));
+  drawButton(panel_ui_geometry::kSend3CButton.left, panel_ui_geometry::kSend3CButton.top,
+             panel_ui_geometry::kSend3CButton.width(), panel_ui_geometry::kSend3CButton.height(),
+             "ENVIAR 3C", themeColor(guition_monitor_theme::kMint));
 }
 
 void playTone(uint16_t frequency, uint16_t durationMs) {
@@ -314,22 +331,6 @@ bool initializeAudio() {
   return true;
 }
 
-void runDisplayDiagnostic() {
-  if (!displayReady) return;
-  Serial.println("DISPLAY DIAGNOSTIC: RED");
-  display->fillScreen(color565(255, 0, 0));
-  delay(400);
-  Serial.println("DISPLAY DIAGNOSTIC: GREEN");
-  display->fillScreen(color565(0, 255, 0));
-  delay(400);
-  Serial.println("DISPLAY DIAGNOSTIC: BLUE");
-  display->fillScreen(color565(0, 0, 255));
-  delay(400);
-  Serial.println("DISPLAY DIAGNOSTIC: WHITE");
-  display->fillScreen(color565(255, 255, 255));
-  delay(400);
-}
-
 bool initializeDisplay() {
   Serial.println("DISPLAY: creating 9-bit SPI command bus");
   displayBus = new Arduino_ESP32SPI(
@@ -358,7 +359,6 @@ bool initializeDisplay() {
   Serial.printf("DISPLAY: backlight GPIO %d PWM=%u\n", pins::backlight, app_config::panelBrightness);
   display->displayOn();
   Serial.println("DISPLAY: displayOn() OK");
-  runDisplayDiagnostic();
   return true;
 }
 
@@ -505,7 +505,7 @@ int send3CCommand(const String& rawCommand) {
       return code;
     }
     lastCommandPoll = millis();
-    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB", true);
+    updatePanel(PanelState::Pending, "CONFIRMACION REQUERIDA EN WEB", true);
   } else {
     setTransportError("POST", code, lastBackendMessage, true);
   }
@@ -542,7 +542,7 @@ void pollCommandStatus() {
     setProtocolError("POLL", result.length() ? result : "Error reportado por WSL");
   } else if (status == "pending_confirmation" || status == "pending" || status == "pendiente") {
     backendAvailable = true;
-    updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB");
+    updatePanel(PanelState::Pending, "CONFIRMACION REQUERIDA EN WEB");
   } else {
     setProtocolError("POLL", status.length() ? String("estado desconocido '") + status + "'" : "falta status");
   }
@@ -615,6 +615,7 @@ void connectWifi() {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
+
   if (sample.touched && !touchDown) {
     if (commandEditorOpen) {
       if (sample.y >= 216) {
@@ -663,7 +664,6 @@ void handleTouch() {
           drawEditor();
         }
       } else if (sample.y >= 42 && sample.y < 114) {
-        // Tap in the text field: place cursor approximately at the tapped character.
         String text(commandBuffer.c_str());
         if (text.length()) {
           display->setTextSize(2);
@@ -680,10 +680,14 @@ void handleTouch() {
           drawEditor();
         }
       }
-    } else if (sample.y >= 350) {
-      if (sample.x < 240) {
+    } else {
+      const panel_ui_geometry::Route route =
+          panel_ui_geometry::route(true, sample.x, sample.y);
+      if (route == panel_ui_geometry::Route::ProbeWsl) {
+        Serial.printf("[TOUCH] PROBAR WSL x=%u y=%u\\n", sample.x, sample.y);
         checkBackendHealth();
-      } else {
+      } else if (route == panel_ui_geometry::Route::Send3C) {
+        Serial.printf("[TOUCH] ENVIAR 3C x=%u y=%u\\n", sample.x, sample.y);
         commandEditorOpen = true;
         keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
         drawEditor();
