@@ -43,6 +43,9 @@ jobs:
       - name: Test Wi-Fi source contract
         run: python tests/test_wifi_source.py
 
+      - name: Test Wi-Fi target scan contract
+        run: python tests/test_wifi_target_scan_contract.py
+
       - name: Test backend discovery contract
         run: python tests/test_backend_discovery.py
 
@@ -137,6 +140,8 @@ jobs:
           .ci/bin/command_text_viewport_test
           g++ -std=c++17 -Wall -Wextra -Werror -Iinclude test/virtual_keyboard_hit_test.cpp -o .ci/bin/virtual_keyboard_hit_test
           .ci/bin/virtual_keyboard_hit_test
+          g++ -std=c++17 -Wall -Wextra -Werror -Iinclude tests/test_touch_feedback_native.cpp -o .ci/bin/touch_feedback_native
+          .ci/bin/touch_feedback_native
           python test/command_buffer_regression.py
 
       - name: Compile ESP32-S3-4848S040

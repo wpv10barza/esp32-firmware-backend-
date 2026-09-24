@@ -397,3 +397,15 @@ The controlled sequence remains:
 **WEB FIRST → VERIFY → REPOSITORY AFTER → BYTE-FOR-BYTE VALIDATION**
 
 The consolidation is documentation-only. It does not modify firmware source, firmware configuration, hardware, GPIO assignments, display initialization, backend architecture, or unrelated repository files. V14.1 and V15 remain represented together in this single README.
+
+## Feedback táctil del editor
+
+El teclado virtual del panel aplica una ventana de debounce estable de **80 ms** para evitar pulsaciones duplicadas por rebote del GT911. La tecla aceptada queda resaltada durante **120 ms** y puede emitir un clic corto mediante I2S.
+
+Los tiempos y el audio de teclas son configurables sin tocar la lógica del editor:
+
+- `PANEL_TOUCH_DEBOUNCE_MS_VALUE`: debounce, por defecto `80` ms.
+- `PANEL_KEY_HIGHLIGHT_MS_VALUE`: highlight, por defecto `120` ms.
+- `PANEL_KEY_AUDIO_ENABLED_VALUE`: feedback sonoro de teclas, por defecto habilitado cuando el audio del panel está disponible.
+
+GitHub Actions ejecuta `tests/test_touch_feedback_native.cpp` con C++ nativo para comprobar rebote, pulsación sostenida, liberación/rearme, movimiento del dedo y rollover de `millis()`. La validación física de sensibilidad táctil, legibilidad del highlight y audio requiere el panel 480x480 conectado.

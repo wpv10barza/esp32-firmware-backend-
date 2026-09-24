@@ -15,6 +15,7 @@
 #include "command_buffer.h"
 #include "command_text_viewport.h"
 #include "virtual_keyboard.h"
+#include "touch_feedback.h"
 
 namespace pins {
 constexpr int backlight = 38;
@@ -102,8 +103,10 @@ constexpr char kBackendAddressKey[] = "addr";
 constexpr char kBackendPortKey[] = "port";
 constexpr char kBackendMdnsService[] = "3c";
 constexpr char kBackendMdnsProtocol[] = "tcp";
-bool touchDown = false;
 constexpr size_t kCommandCapacity = 240;
+touch_feedback::Controller touchFeedback(
+    touch_feedback::Config{app_config::panelTouchDebounceMs, app_config::panelKeyHighlightMs});
+int renderedHighlightedKey = -1;
 CommandBuffer<kCommandCapacity> commandBuffer;
 virtual_keyboard::KeyboardMode keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
 bool commandEditorOpen = false;
@@ -202,14 +205,19 @@ void drawEditor() {
 
   virtual_keyboard::Key keys[50]{};
   const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
+  const int highlightedKey = touchFeedback.highlightedKey(millis());
   for (size_t i = 0; i < count; ++i) {
     const auto& key = keys[i];
-    const auto fill = key.definition.kind == virtual_keyboard::KeyKind::Enter
-        ? color565(18, 105, 73) : color565(25, 45, 65);
+    const bool highlighted = highlightedKey == static_cast<int>(i);
+    const auto fill = highlighted
+        ? color565(72, 132, 178)
+        : (key.definition.kind == virtual_keyboard::KeyKind::Enter
+            ? color565(18, 105, 73) : color565(25, 45, 65));
+    const auto outline = highlighted ? WHITE : color565(130, 160, 180);
     display->fillRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
                            key.rect.bottom - key.rect.top, 7, fill);
     display->drawRoundRect(key.rect.left, key.rect.top, key.rect.right - key.rect.left,
-                           key.rect.bottom - key.rect.top, 7, color565(130, 160, 180));
+                           key.rect.bottom - key.rect.top, 7, outline);
     display->setTextSize(key.definition.label[0] && strlen(key.definition.label) > 2 ? 1 : 2);
     int16_t x1 = 0, y1 = 0; uint16_t w = 0, h = 0;
     display->getTextBounds(key.definition.label, 0, 0, &x1, &y1, &w, &h);
@@ -218,6 +226,7 @@ void drawEditor() {
                        key.rect.top + ((key.rect.bottom-key.rect.top)-h)/2);
     display->print(key.definition.label);
   }
+  renderedHighlightedKey = highlightedKey;
   drawButton(8, 172, 100, 36, "CANCELAR", color565(80, 35, 35));
   drawButton(112, 172, 72, 36, "<", color565(42, 67, 90));
   drawButton(192, 172, 72, 36, "DEL", color565(105, 72, 40));
@@ -228,6 +237,7 @@ void drawEditor() {
   
 void drawPanel() {
   if (commandEditorOpen) { drawEditor(); return; }
+  renderedHighlightedKey = -1;
   if (!displayReady) return;
   const uint16_t background = stateBackground(panelState);
   const uint16_t eye = panelState == PanelState::Offline ? color565(125, 135, 145) : WHITE;
@@ -288,6 +298,28 @@ void playTone(uint16_t frequency, uint16_t durationMs) {
   }
   i2s_zero_dma_buffer(I2S_NUM_0);
 }
+
+void playKeyFeedback(virtual_keyboard::KeyKind kind) {
+  if (!app_config::panelKeyAudioEnabled) return;
+  switch (kind) {
+    case virtual_keyboard::KeyKind::Enter:
+      playTone(1040, 24);
+      break;
+    case virtual_keyboard::KeyKind::Backspace:
+      playTone(760, 18);
+      break;
+    case virtual_keyboard::KeyKind::Space:
+      playTone(1320, 16);
+      break;
+    case virtual_keyboard::KeyKind::ToggleAlphaNumeric:
+      playTone(900, 18);
+      break;
+    case virtual_keyboard::KeyKind::Character:
+      playTone(1560, 14);
+      break;
+  }
+}
+
 
 void updatePanel(PanelState state, const String& detail, bool sound = false) {
   const bool changed = state != panelState;
@@ -424,8 +456,14 @@ bool i2cWriteByte(uint16_t reg, uint8_t value) {
 TouchSample readTouch() {
   TouchSample sample;
   uint8_t status = 0;
-  if (!i2cRead(kTouchStatusRegister, &status, 1) || !(status & 0x80)) return sample;
+  if (!i2cRead(kTouchStatusRegister, &status, 1)) return sample;
+
+  // A successful GT911 status read also gives us a valid no-touch sample.
+  // This lets the debounce controller observe a real release instead of
+  // depending on the previous raw touch state.
   sample.ready = true;
+  if (!(status & 0x80)) return sample;
+
   const uint8_t points = status & 0x0F;
   if (points > 0 && points <= 5) {
     uint8_t data[7] = {};
@@ -513,7 +551,11 @@ bool discoverBackendEndpoint() {
     while (logicalHost.endsWith(".")) logicalHost.remove(logicalHost.length() - 1);
     if (!logicalHost.endsWith(".local")) logicalHost += ".local";
 
-    const IPAddress address = MDNS.address(index);
+    String hostForQuery = logicalHost;
+    if (hostForQuery.endsWith(".local")) {
+      hostForQuery.remove(hostForQuery.length() - 6);
+    }
+    const IPAddress address = MDNS.queryHost(hostForQuery.c_str(), 2000);
     const uint16_t port = MDNS.port(index);
     if (port == 0 || address == IPAddress()) continue;
 
@@ -562,7 +604,7 @@ String jsonEscape(const String& input) {
   for (size_t index = 0; index < input.length(); ++index) {
     const char value = input[index];
     if (value == '\\' || value == '"') { output += '\\'; output += value; }
-    else if (value == '\n') output += "\\n";
+    else if (value == '\n') output += "\n";
     else if (static_cast<uint8_t>(value) >= 0x20) output += value;
   }
   return output;
@@ -797,11 +839,75 @@ const char* wifiStatusLabel(wl_status_t status) {
   }
 }
 
+void wifiEventHandler(WiFiEvent_t event, WiFiEventInfo_t info) {
+  switch (event) {
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      Serial.printf("Wi-Fi STA conectado: SSID=\"%s\"\n", app_config::wifiSsid);
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      Serial.printf(
+        "Wi-Fi STA desconectado: SSID=\"%s\" reason=%u\n",
+        app_config::wifiSsid,
+        static_cast<unsigned>(info.wifi_sta_disconnected.reason));
+      break;
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      Serial.printf(
+        "Wi-Fi GOT_IP: ip=%s gateway=%s rssi=%d\n",
+        WiFi.localIP().toString().c_str(),
+        WiFi.gatewayIP().toString().c_str(),
+        WiFi.RSSI());
+      break;
+    case ARDUINO_EVENT_WIFI_STA_LOST_IP:
+      Serial.println("Wi-Fi LOST_IP");
+      break;
+    default:
+      break;
+  }
+}
+
+void logConfiguredWifiScan() {
+  Serial.printf("Wi-Fi: escaneando SSID objetivo=\"%s\"\n",
+    app_config::wifiSsid);
+
+  const int networks = WiFi.scanNetworks();
+  if (networks < 0) {
+    Serial.printf("Wi-Fi: scan failed status=%d (%s)\n",
+      networks, wifiStatusLabel(WiFi.status()));
+    return;
+  }
+
+  bool targetFound = false;
+  Serial.printf("Wi-Fi: %d redes encontradas\n", networks);
+
+  for (int index = 0; index < networks; ++index) {
+    const String ssid = WiFi.SSID(index);
+    const int32_t rssi = WiFi.RSSI(index);
+    Serial.printf("  Wi-Fi[%d] SSID=\"%s\" RSSI=%d\n",
+      index, ssid.c_str(), static_cast<int>(rssi));
+
+    if (ssid == app_config::wifiSsid) {
+      targetFound = true;
+      Serial.printf(
+        "Wi-Fi: SSID objetivo encontrado: \"%s\" RSSI=%d dBm\n",
+        app_config::wifiSsid, static_cast<int>(rssi));
+    }
+  }
+
+  if (!targetFound) {
+    Serial.printf(
+      "Wi-Fi: ERROR SSID objetivo \"%s\" no aparece en el escaneo\n",
+      app_config::wifiSsid);
+  }
+
+  WiFi.scanDelete();
+}
+
 void configureWifi() {
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(app_config::deviceId);
+  WiFi.onEvent(wifiEventHandler);
 }
 
 void connectWifi() {
@@ -811,8 +917,11 @@ void connectWifi() {
     return;
   }
   configureWifi();
-  Serial.printf("Wi-Fi: iniciando STA, credenciales presentes, status=%d (%s)\n",
-    static_cast<int>(WiFi.status()), wifiStatusLabel(WiFi.status()));
+  logConfiguredWifiScan();
+  Serial.printf("Wi-Fi: objetivo SSID=\"%s\" status=%d (%s)\n",
+    app_config::wifiSsid,
+    static_cast<int>(WiFi.status()),
+    wifiStatusLabel(WiFi.status()));
   WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
   lastWifiAttempt = millis();
   updatePanel(PanelState::Busy, "Conectando Wi-Fi");
@@ -821,82 +930,105 @@ void connectWifi() {
 void handleTouch() {
   const TouchSample sample = readTouch();
   if (!sample.ready) return;
-  if (sample.touched && !touchDown) {
-    if (commandEditorOpen) {
-      if (sample.y >= 216) {
-        virtual_keyboard::Key key{};
-        if (virtual_keyboard::hitTest(keyboardMode, sample.x, sample.y, &key)) {
-          using virtual_keyboard::KeyKind;
-          switch (key.definition.kind) {
-            case KeyKind::Character:
-              commandBuffer.insert(key.definition.label);
-              break;
-            case KeyKind::Backspace:
-              commandBuffer.backspace();
-              break;
-            case KeyKind::Space:
-              commandBuffer.insert(' ');
-              break;
-            case KeyKind::Enter:
-              app_config::commandBuffer = commandBuffer.c_str();
-              commandEditorOpen = false;
-              drawPanel();
-              send3CCommand(app_config::commandBuffer);
-              touchDown = sample.touched;
-              return;
-            case KeyKind::ToggleAlphaNumeric:
-              keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
-                  ? virtual_keyboard::KeyboardMode::NumericSymbols
-                  : virtual_keyboard::KeyboardMode::Alpha;
-              break;
-          }
-          drawEditor();
+
+  int keyIndex = -1;
+  if (commandEditorOpen && sample.touched && sample.y >= virtual_keyboard::kKeyboardY) {
+    keyIndex = virtual_keyboard::hitTestIndex(keyboardMode, sample.x, sample.y);
+  }
+
+  const auto event = touchFeedback.update(sample.touched, keyIndex, millis());
+  if (!event.pressed) return;
+
+  if (commandEditorOpen) {
+    if (sample.y >= virtual_keyboard::kKeyboardY && event.keyIndex >= 0) {
+      virtual_keyboard::Key keys[50]{};
+      const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);
+      if (static_cast<size_t>(event.keyIndex) < count) {
+        const auto& key = keys[event.keyIndex];
+        bool accepted = false;
+        using virtual_keyboard::KeyKind;
+        switch (key.definition.kind) {
+          case KeyKind::Character:
+            accepted = commandBuffer.insert(key.definition.label);
+            break;
+          case KeyKind::Backspace:
+            accepted = commandBuffer.backspace();
+            break;
+          case KeyKind::Space:
+            accepted = commandBuffer.insert(' ');
+            break;
+          case KeyKind::Enter:
+            app_config::commandBuffer = commandBuffer.c_str();
+            commandEditorOpen = false;
+            drawPanel();
+            playKeyFeedback(key.definition.kind);
+            send3CCommand(app_config::commandBuffer);
+            return;
+          case KeyKind::ToggleAlphaNumeric:
+            keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
+                ? virtual_keyboard::KeyboardMode::NumericSymbols
+                : virtual_keyboard::KeyboardMode::Alpha;
+            accepted = true;
+            break;
         }
-      } else if (sample.y >= 160 && sample.y < 215) {
-        if (sample.x < 110) {
-          commandEditorOpen = false;
-          drawPanel();
-        } else if (sample.x < 190) {
-          commandBuffer.moveLeft();
-          drawEditor();
-        } else if (sample.x < 270) {
-          commandBuffer.deleteForward();
-          drawEditor();
-        } else if (sample.x < 395) {
-          keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
-              ? virtual_keyboard::KeyboardMode::NumericSymbols
-              : virtual_keyboard::KeyboardMode::Alpha;
-          drawEditor();
-        }
-      } else if (sample.y >= 42 && sample.y < 114) {
-        // Tap in the text field: place cursor approximately at the tapped character.
-        String text(commandBuffer.c_str());
-        if (text.length()) {
-          display->setTextSize(2);
-          size_t best = 0;
-          uint16_t bestDistance = UINT16_MAX;
-          for (size_t i = 0; i <= text.length() && i <= kCommandCapacity; ++i) {
-            int16_t x1=0,y1=0; uint16_t w=0,h=0;
-            display->getTextBounds(text.substring(0, i), 0, 0, &x1, &y1, &w, &h);
-            const uint16_t distance = static_cast<uint16_t>(
-              abs(static_cast<int>(15 + w) - static_cast<int>(sample.x)));
-            if (distance < bestDistance) { bestDistance = distance; best = i; }
-          }
-          commandBuffer.setCursor(best);
-          drawEditor();
-        }
-      }
-    } else if (sample.y >= 350) {
-      if (sample.x < 240) {
-        checkBackendHealth();
-      } else {
-        commandEditorOpen = true;
-        keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+
+        if (accepted) playKeyFeedback(key.definition.kind);
         drawEditor();
       }
+    } else if (sample.y >= 160 && sample.y < virtual_keyboard::kKeyboardY) {
+      bool changed = false;
+      if (sample.x < 110) {
+        commandEditorOpen = false;
+        drawPanel();
+        changed = true;
+      } else if (sample.x < 190) {
+        commandBuffer.moveLeft();
+        drawEditor();
+        changed = true;
+      } else if (sample.x < 270) {
+        commandBuffer.deleteForward();
+        drawEditor();
+        changed = true;
+      } else if (sample.x < 395) {
+        keyboardMode = keyboardMode == virtual_keyboard::KeyboardMode::Alpha
+            ? virtual_keyboard::KeyboardMode::NumericSymbols
+            : virtual_keyboard::KeyboardMode::Alpha;
+        drawEditor();
+        changed = true;
+      }
+      if (changed && app_config::panelKeyAudioEnabled) playTone(900, 14);
+    } else if (sample.y >= 42 && sample.y < 114) {
+      String text(commandBuffer.c_str());
+      if (text.length()) {
+        display->setTextSize(2);
+        size_t best = 0;
+        uint16_t bestDistance = UINT16_MAX;
+        for (size_t i = 0; i <= text.length() && i <= kCommandCapacity; ++i) {
+          int16_t x1=0,y1=0; uint16_t w=0,h=0;
+          display->getTextBounds(text.substring(0, i), 0, 0, &x1, &y1, &w, &h);
+          const uint16_t distance = static_cast<uint16_t>(
+            abs(static_cast<int>(15 + w) - static_cast<int>(sample.x)));
+          if (distance < bestDistance) { bestDistance = distance; best = i; }
+        }
+        commandBuffer.setCursor(best);
+        drawEditor();
+        if (app_config::panelKeyAudioEnabled) playTone(900, 14);
+      }
+    }
+  } else if (sample.y >= 350) {
+    if (sample.x < 240) {
+      if (app_config::panelKeyAudioEnabled) playTone(900, 14);
+      checkBackendHealth();
+    } else {
+      commandEditorOpen = true;
+      keyboardMode = virtual_keyboard::KeyboardMode::Alpha;
+      // Keep the stable-touch state: the opening tap must not be recycled
+      // as the first keyboard key while the finger is still down.
+      renderedHighlightedKey = -1;
+      drawEditor();
+      if (app_config::panelKeyAudioEnabled) playTone(900, 14);
     }
   }
-  touchDown = sample.touched;
 }
 }  // namespace
 
@@ -922,6 +1054,11 @@ void setup() {
 void loop() {
   web.handleClient();
   handleTouch();
+
+  if (commandEditorOpen) {
+    const int activeHighlight = touchFeedback.highlightedKey(millis());
+    if (activeHighlight != renderedHighlightedKey) drawEditor();
+  }
 
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiAnnounced) {
