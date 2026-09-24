@@ -61,8 +61,8 @@ require(health, "discoverBackendEndpoint();", "initial discovery")
 # A health failure must trigger a fresh mDNS lookup and one retry.
 require(health, "const BackendEndpoint failedEndpoint = backendEndpoint;", "failed endpoint snapshot")
 require(health, "rediscovering _%s._%s", "rediscovery log")
-if health.count("discoverBackendEndpoint();") < 2:
-    raise AssertionError("health path must support both initial discovery and post-failure rediscovery")
+post_failure = health.split("if (checkBackendHealthOnce()) return true;", 1)[1]
+require(post_failure, "if (!discoverBackendEndpoint()) return false;", "post-failure rediscovery")
 require(health, "return checkBackendHealthOnce();", "post-rediscovery health retry")
 
 
