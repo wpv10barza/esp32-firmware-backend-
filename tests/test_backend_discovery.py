@@ -34,9 +34,11 @@ require(MAIN, "MDNS.port(index)", "discovered backend port")
 
 
 # Required NVS cache path.
-require(MAIN, "backendPrefs.getString(kBackendHostKey, \"\")", "NVS host load")
+require(MAIN, "backendPrefs.getString(kBackendHostKey, kBackendLogicalHost)", "NVS logical host load")
+require(MAIN, "backendPrefs.getString(kBackendAddressKey, \"\")", "NVS address load")
 require(MAIN, "backendPrefs.getUShort(kBackendPortKey, 0)", "NVS port load")
-require(MAIN, "backendPrefs.putString(kBackendHostKey, endpointValue.host)", "NVS host save")
+require(MAIN, "backendPrefs.putString(kBackendHostKey, endpointValue.logicalHost)", "NVS logical host save")
+require(MAIN, "backendPrefs.putString(kBackendAddressKey, endpointValue.address)", "NVS address save")
 require(MAIN, "backendPrefs.putUShort(kBackendPortKey, endpointValue.port)", "NVS port save")
 require(MAIN, 'constexpr char kBackendPrefsNamespace[] = "backend";', "NVS namespace")
 
@@ -75,7 +77,7 @@ require(WORKFLOW, "python tests/test_backend_discovery.py", "GitHub Actions back
 
 print("Backend discovery contract: PASS")
 print("- no BACKEND_IP or fixed private IP remains")
-print("- Wi-Fi -> mDNS _3c._tcp -> host/IP + port")
+print("- Wi-Fi -> mDNS _3c._tcp -> 3c-backend.local -> resolved IP + port")
 print("- endpoint cached/loaded through NVS Preferences")
 print("- cached endpoint is used before rediscovery")
 print("- failed health triggers rediscovery and one retry")
