@@ -130,6 +130,42 @@ void test_failed_set_keeps_previous_valid_text() {
   TEST_ASSERT_TRUE(buffer.invariantHolds());
 }
 
+void test_mixed_arbitrary_cursor_edit_sequence_keeps_string_integrity() {
+  CommandBuffer<64> buffer;
+  TEST_ASSERT_TRUE(buffer.set("ABCDEFGHIJ"));
+  TEST_ASSERT_TRUE(buffer.invariantHolds());
+
+  buffer.setCursor(4);
+  TEST_ASSERT_TRUE(buffer.insert("123", 3));
+  TEST_ASSERT_EQUAL_STRING("ABCD123EFGHIJ", buffer.c_str());
+  TEST_ASSERT_EQUAL_UINT(7, buffer.cursor());
+  TEST_ASSERT_TRUE(buffer.invariantHolds());
+
+  buffer.moveLeft();
+  buffer.moveLeft();
+  TEST_ASSERT_TRUE(buffer.insert('X'));
+  TEST_ASSERT_EQUAL_STRING("ABCD12X3EFGHIJ", buffer.c_str());
+  TEST_ASSERT_EQUAL_UINT(6, buffer.cursor());
+  TEST_ASSERT_TRUE(buffer.invariantHolds());
+
+  TEST_ASSERT_TRUE(buffer.backspace());
+  TEST_ASSERT_EQUAL_STRING("ABCD123EFGHIJ", buffer.c_str());
+  TEST_ASSERT_EQUAL_UINT(5, buffer.cursor());
+  TEST_ASSERT_TRUE(buffer.invariantHolds());
+
+  buffer.setCursor(10);
+  TEST_ASSERT_TRUE(buffer.deleteForward());
+  TEST_ASSERT_EQUAL_STRING("ABCD123EFGIJ", buffer.c_str());
+  TEST_ASSERT_EQUAL_UINT(10, buffer.cursor());
+  TEST_ASSERT_TRUE(buffer.invariantHolds());
+
+  buffer.setCursor(2);
+  TEST_ASSERT_TRUE(buffer.insert('Z'));
+  TEST_ASSERT_EQUAL_STRING("ABZCD123EFGIJ", buffer.c_str());
+  TEST_ASSERT_EQUAL_UINT(3, buffer.cursor());
+  TEST_ASSERT_TRUE(buffer.invariantHolds());
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_insert_at_middle_preserves_order);
@@ -141,5 +177,6 @@ int main() {
   RUN_TEST(test_capacity_guard_does_not_corrupt_existing_text);
   RUN_TEST(test_delete_and_backspace_at_boundaries_are_noops);
   RUN_TEST(test_failed_set_keeps_previous_valid_text);
+  RUN_TEST(test_mixed_arbitrary_cursor_edit_sequence_keeps_string_integrity);
   return UNITY_END();
 }
