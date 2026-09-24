@@ -55,7 +55,9 @@ String panelDetail = "Iniciando";
 String lastBackendMessage = "Sin verificar";
 String lastCommandId;
 unsigned long lastWifiAttempt = 0;
+unsigned long lastWifiScan = 0;
 unsigned long lastHealthCheck = 0;
+uint32_t wifiFailureCount = 0;
 unsigned long lastCommandPoll = 0;
 bool backendAvailable = false;
 bool displayReady = false;
@@ -443,7 +445,7 @@ TouchSample readTouch() {
 
 void loadBackendEndpointFromNvs() {
   backendEndpoint.clear();
-  if (!backendPrefs.begin(kBackendPrefsNamespace, true)) {
+  if (!backendPrefs.begin(kBackendPrefsNamespace, false)) {
     Serial.println("BACKEND: NVS cache unavailable; mDNS discovery required");
     return;
   }
@@ -472,10 +474,22 @@ void saveBackendEndpointToNvs(const BackendEndpoint& endpointValue) {
     Serial.println("BACKEND: unable to open NVS cache for write");
     return;
   }
-  backendPrefs.putString(kBackendHostKey, endpointValue.logicalHost);
-  backendPrefs.putString(kBackendAddressKey, endpointValue.address);
-  backendPrefs.putUShort(kBackendPortKey, endpointValue.port);
+  const size_t hostBytes = backendPrefs.putString(
+    kBackendHostKey, endpointValue.logicalHost);
+  const size_t addressBytes = backendPrefs.putString(
+    kBackendAddressKey, endpointValue.address);
+  const size_t portBytes = backendPrefs.putUShort(
+    kBackendPortKey, endpointValue.port);
   backendPrefs.end();
+
+  if (hostBytes == 0 || addressBytes == 0 || portBytes == 0) {
+    Serial.printf(
+      "BACKEND: NVS cache write incomplete host=%u address=%u port=%u\n",
+      static_cast<unsigned>(hostBytes),
+      static_cast<unsigned>(addressBytes),
+      static_cast<unsigned>(portBytes));
+    return;
+  }
   Serial.printf("BACKEND: cached endpoint saved %s -> %s:%u\n",
     endpointValue.logicalHost.c_str(),
     endpointValue.address.c_str(),
@@ -483,6 +497,7 @@ void saveBackendEndpointToNvs(const BackendEndpoint& endpointValue) {
 }
 
 bool startMdns() {
+  if (WiFi.status() != WL_CONNECTED) return false;
   if (mdnsReady) return true;
   mdnsReady = MDNS.begin("esp32-panel-3c");
   if (!mdnsReady) {
@@ -492,6 +507,13 @@ bool startMdns() {
   MDNS.addService("http", "tcp", 80);
   Serial.println("BACKEND: mDNS responder initialized");
   return true;
+}
+
+void stopMdns() {
+  if (!mdnsReady) return;
+  MDNS.end();
+  mdnsReady = false;
+  Serial.println("BACKEND: mDNS stopped after Wi-Fi loss");
 }
 
 bool discoverBackendEndpoint() {
@@ -513,9 +535,23 @@ bool discoverBackendEndpoint() {
     while (logicalHost.endsWith(".")) logicalHost.remove(logicalHost.length() - 1);
     if (!logicalHost.endsWith(".local")) logicalHost += ".local";
 
-    const IPAddress address = MDNS.address(index);
+    String hostForQuery = logicalHost;
+    if (hostForQuery.endsWith(".local")) {
+      hostForQuery.remove(hostForQuery.length() - 6);
+    }
+
+    char queryHost[64] = {};
+    hostForQuery.toCharArray(queryHost, sizeof(queryHost));
+
+    const IPAddress address = MDNS.queryHost(queryHost, 2000);
     const uint16_t port = MDNS.port(index);
-    if (port == 0 || address == IPAddress()) continue;
+
+    if (port == 0 || address == IPAddress()) {
+      Serial.printf(
+        "BACKEND: mDNS host resolution failed for %s\n",
+        logicalHost.c_str());
+      continue;
+    }
 
     Serial.printf(
       "BACKEND: mDNS candidate host=%s address=%s port=%u\n",
@@ -593,6 +629,12 @@ void addDeviceToken(HTTPClient& http) {
 }
 
 bool checkBackendHealthOnce() {
+  if (WiFi.status() != WL_CONNECTED) {
+    backendAvailable = false;
+    lastBackendMessage = "Wi-Fi desconectado";
+    return false;
+  }
+
   if (!backendEndpoint.valid()) {
     backendAvailable = false;
     lastBackendMessage = "Sin endpoint descubierto";
@@ -797,6 +839,68 @@ const char* wifiStatusLabel(wl_status_t status) {
   }
 }
 
+void beginWifiConnection(const char* reason) {
+  Serial.printf(
+    "Wi-Fi: iniciando conexión (%s) SSID=\"%s\"\n",
+    reason,
+    app_config::wifiSsid);
+
+  WiFi.begin(
+    app_config::wifiSsid,
+    app_config::wifiPassword);
+
+  lastWifiAttempt = millis();
+  ++wifiFailureCount;
+
+  updatePanel(
+    PanelState::Busy,
+    "Conectando Wi-Fi");
+}
+
+bool configuredWifiVisible() {
+  if (!strlen(app_config::wifiSsid)) return false;
+
+  Serial.printf(
+    "Wi-Fi: escaneando para SSID \"%s\"\n",
+    app_config::wifiSsid);
+
+  const int16_t networkCount = WiFi.scanNetworks(false, true);
+
+  if (networkCount < 0) {
+    Serial.printf(
+      "Wi-Fi: scanNetworks fallo=%d\n",
+      static_cast<int>(networkCount));
+    return false;
+  }
+
+  bool visible = false;
+
+  Serial.printf(
+    "Wi-Fi: %d redes encontradas\n",
+    static_cast<int>(networkCount));
+
+  for (int index = 0; index < networkCount; ++index) {
+    const String ssid = WiFi.SSID(index);
+    const int32_t rssi = WiFi.RSSI(index);
+
+    Serial.printf(
+      "  Wi-Fi[%d] SSID=\"%s\" RSSI=%ld\n",
+      index,
+      ssid.c_str(),
+      static_cast<long>(rssi));
+
+    if (ssid == String(app_config::wifiSsid)) {
+      visible = true;
+      Serial.printf(
+        "Wi-Fi: SSID configurado visible RSSI=%ld\n",
+        static_cast<long>(rssi));
+    }
+  }
+
+  WiFi.scanDelete();
+  return visible;
+}
+
 void configureWifi() {
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
@@ -810,12 +914,73 @@ void connectWifi() {
     Serial.println("Configure include/local_config.h antes de usar Wi-Fi.");
     return;
   }
+
   configureWifi();
-  Serial.printf("Wi-Fi: iniciando STA, credenciales presentes, status=%d (%s)\n",
-    static_cast<int>(WiFi.status()), wifiStatusLabel(WiFi.status()));
-  WiFi.begin(app_config::wifiSsid, app_config::wifiPassword);
-  lastWifiAttempt = millis();
-  updatePanel(PanelState::Busy, "Conectando Wi-Fi");
+  lastWifiScan = 0;
+  wifiFailureCount = 0;
+
+  Serial.printf(
+    "Wi-Fi: STA preparada, SSID configurado=\"%s\" status=%d (%s)\n",
+    app_config::wifiSsid,
+    static_cast<int>(WiFi.status()),
+    wifiStatusLabel(WiFi.status()));
+
+  if (!configuredWifiVisible()) {
+    lastWifiScan = millis();
+    lastWifiAttempt = millis();
+    updatePanel(
+      PanelState::Offline,
+      "Esperando Wi-Fi");
+
+    Serial.printf(
+      "Wi-Fi: SSID \"%s\" no encontrado; esperando siguiente escaneo\n",
+      app_config::wifiSsid);
+    return;
+  }
+
+  beginWifiConnection("boot");
+}
+
+void serviceWifi() {
+  if (!strlen(app_config::wifiSsid)) return;
+  if (WiFi.status() == WL_CONNECTED) return;
+
+  const unsigned long now = millis();
+
+  if (now - lastWifiScan < app_config::wifiScanMs) return;
+
+  lastWifiScan = now;
+
+  const wl_status_t status = WiFi.status();
+
+  Serial.printf(
+    "Wi-Fi: desconectado status=%d (%s); escaneo de recuperación\n",
+    static_cast<int>(status),
+    wifiStatusLabel(status));
+
+  const bool visible = configuredWifiVisible();
+
+  if (!visible) {
+    updatePanel(
+      PanelState::Offline,
+      "Esperando Wi-Fi");
+
+    Serial.printf(
+      "Wi-Fi: SSID \"%s\" no visible; esperando próximo escaneo\n",
+      app_config::wifiSsid);
+    return;
+  }
+
+  if (now - lastWifiAttempt < app_config::wifiRetryMs) {
+    Serial.println(
+      "Wi-Fi: SSID visible pero retry window aún activo");
+    return;
+  }
+
+  beginWifiConnection(
+    status == WL_NO_SSID_AVAIL
+      ? "AP reapareció"
+      : "recuperación");
 }
 
 void handleTouch() {
@@ -940,15 +1105,15 @@ void loop() {
       checkBackendHealth();
     }
   } else {
-    wifiAnnounced = false;
-    if (strlen(app_config::wifiSsid) && millis() - lastWifiAttempt >= app_config::wifiRetryMs) {
-      lastWifiAttempt = millis();
-      const wl_status_t status = WiFi.status();
-      Serial.printf("Wi-Fi no conectado: status=%d (%s); reintentando con WiFi.reconnect()\n",
-        static_cast<int>(status), wifiStatusLabel(status));
-      WiFi.reconnect();
-      updatePanel(PanelState::Busy, "Reconectando Wi-Fi");
+    if (wifiAnnounced) {
+      wifiAnnounced = false;
+      backendAvailable = false;
+      stopMdns();
+      Serial.println(
+        "Wi-Fi: conexión perdida; backend y mDNS marcados como no disponibles");
     }
+
+    serviceWifi();
   }
   delay(5);
 }
