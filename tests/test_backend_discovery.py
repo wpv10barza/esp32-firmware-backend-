@@ -29,7 +29,6 @@ require(MAIN, "#include <Preferences.h>", "NVS Preferences include")
 require(MAIN, 'constexpr char kBackendMdnsService[] = "3c";', "mDNS service name")
 require(MAIN, 'constexpr char kBackendMdnsProtocol[] = "tcp";', "mDNS protocol")
 require(MAIN, "MDNS.queryService(kBackendMdnsService, kBackendMdnsProtocol)", "mDNS service query")
-require(MAIN, "MDNS.IP(index)", "discovered backend IP")
 require(MAIN, "MDNS.port(index)", "discovered backend port")
 
 
