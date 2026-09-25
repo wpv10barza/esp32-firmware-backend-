@@ -248,7 +248,7 @@ Los marcadores de evidencia de software requeridos para el registro V14.1 se con
 * `server/deviceCommands.ts`
 * `server/reviewControl.ts`
 
-De este modo, se retiene a `server/deviceApi.ts` como la referencia de evidencia de la API del dispositivo; a `server/deviceCommands.ts` como la referencia de estado y normalización de comandos; y a `server/reviewControl.ts` como la referencia de control de revisión humana. En el documento principal (*README*) se registran estos archivos como marcadores de evidencia de implementación y no se modifica su contenido como parte de esta consolidación de documentación.
+De este modo, se retiene a `server/deviceApi.ts` como la referencia de evidencia de la API del dispositivo; a `server/deviceCommands.ts` como la referencia de estado y normalización de comandos; y a `server/reviewControl.ts` como la referencia de control de revisión humana. En el documento principal (*README*) se registran estos archivos como marcadores de evidencia de implementación, por lo cual no se modifica su contenido como parte de esta consolidación de la documentación.
 
 ### 3.2.3 Diseño del agente de IA: Modelo de inteligencia artificial y procesamiento controlado
 
