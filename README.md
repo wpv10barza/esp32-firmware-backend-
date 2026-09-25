@@ -63,113 +63,245 @@ When the two versions contain equivalent statements, the unified README keeps on
 
 Where a statement would imply a physical test, flashing event, deployment, or runtime result, the unified document keeps the more conservative evidence wording unless explicit execution evidence exists.
 
-## 3.1 Initial conditions and documentation scope
+## 3.1. Condiciones iniciales del sistema T-030
 
-### 3.1.1 Condiciones iniciales del sistema de desarrollo
+Las condiciones iniciales que se deberán considerar para satisfacer los requerimientos de diseño, arquitectura, comunicación, validación y persistencia del sistema T-030 se establecen a continuación. Cada condición se formula de manera prescriptiva y deberá mantenerse coherente con la implementación vigente del repositorio del firmware y con la versión del repositorio complementario `wpv10barza/asistente-3c` utilizada por el flujo de integración.
 
-El sistema de desarrollo comprende dos subsistemas obligatorios e inseparables para la operación del sistema T-030: el firmware del panel ESP32-S3-4848S040 y el backend Asistente 3C. Ambos subsistemas cumplen funciones complementarias. El firmware concentra la interacción física con el usuario, la representación visual, la captura de eventos táctiles y la comunicación con el servicio. El backend concentra la recepción de órdenes, su interpretación mediante inteligencia artificial, la validación determinista, el control de la revisión humana y la coordinación del acceso a la fuente maestra. La separación de responsabilidades permite mantener un control explícito sobre las operaciones que pueden modificar la información de mantenimiento.
+### a) Condiciones iniciales de unificación de versiones y alcance documental
 
-### 3.1.2 Plataforma electrónica - Subsistema firmware
+• Cuando dos versiones de la documentación contengan declaraciones equivalentes, el documento consolidado deberá mantener una única declaración técnicamente consistente.
 
-El sistema se desarrolló sobre un panel ESP32-S3-4848S040 configurado como objetivo específico de compilación dentro del entorno Arduino para microcontroladores Espressif. La configuración vigente establece una memoria Flash de 16 MB y el uso de PSRAM OPI. La interfaz de usuario trabaja con una resolución lógica de 480 × 480 píxeles y emplea una pantalla RGB asociada a un controlador ST7701S y un sistema táctil capacitivo basado en GT911. La representación gráfica se implementó mediante Arduino-GFX y la conectividad del dispositivo se estableció mediante Wi-Fi.
+• Cuando una declaración de la versión V14.1 añada detalles que no estén presentes en la V15, dicha información se deberá conservar dentro de la sección técnica que corresponda.
 
-El firmware incorpora una máquina de estados para representar las condiciones de operación del panel, diferenciando situaciones de inicio, indisponibilidad, disponibilidad, procesamiento, espera de confirmación, aplicación, rechazo y error. Esta separación permite que el estado de la comunicación y del procesamiento sea visible para el usuario sin confundir una orden recibida con una orden aplicada. La interfaz también dispone de un mecanismo de edición de comandos con cursor, inserción de caracteres, eliminación, desplazamiento y teclado virtual adaptado a la geometría de la pantalla.
+• Cuando la versión V15 incorpore información adicional de línea base, trazabilidad o control documental, dicha información se deberá mantener sin duplicar innecesariamente el contenido técnico.
 
-La gestión de órdenes utiliza un búfer de comandos con capacidad definida y mantiene una posición de cursor independiente del contenido almacenado. El firmware genera solicitudes asociadas a un identificador de dispositivo y a un identificador de petición. Este diseño permite que el backend reconozca reenvíos de una misma petición y evite tratar una retransmisión como una nueva operación lógica. La comunicación se ejecuta mediante solicitudes HTTP hacia el servicio 3C, incluyendo mecanismos de consulta de disponibilidad, envío de comandos, consulta de órdenes pendientes y consulta de resultados.
+• Cuando una declaración implique una prueba física, programación del dispositivo, *flashing*, despliegue o resultado de ejecución, la documentación deberá utilizar únicamente el nivel de evidencia que pueda demostrarse mediante registros reproducibles.
 
-El dispositivo no ejecuta escritura directa sobre la fuente maestra. La función del firmware consiste en capturar la interacción, estructurar la orden, transmitirla al backend y presentar al usuario el estado de su procesamiento. De esta forma, la modificación de la información queda desacoplada del equipo embebido y se conserva una barrera lógica entre la interfaz física y la persistencia de datos.
+• La documentación deberá diferenciar explícitamente entre evidencia externa, evidencia de repositorio y evidencia de ejecución.
 
-### 3.1.3 Plataforma backend Asistente 3C - Subsistema obligatorio
+### b) Condiciones iniciales del sistema de desarrollo
 
-El subsistema backend se desarrolló como una aplicación web basada en Node.js, TypeScript y Express, complementada con una interfaz React ejecutada mediante Vite. La configuración vigente incorpora la biblioteca oficial de Google GenAI para realizar la interpretación estructurada de comandos. La aplicación utiliza variables de entorno para parámetros sensibles y de operación, evitando incorporar valores privados dentro del código versionado.
+• El sistema T-030 deberá comprender dos subsistemas coordinados: el firmware del panel ESP32-S3-4848S040 y el backend Asistente 3C implementado en el repositorio complementario `wpv10barza/asistente-3c`.
 
-La arquitectura del backend se organiza alrededor de una API de dispositivo y un mecanismo de almacenamiento temporal de órdenes. Las solicitudes provenientes del panel son normalizadas y verificadas antes de ingresar a la cola. Cada orden conserva un identificador único, un identificador de petición, la identificación del dispositivo, el texto recibido y un estado de procesamiento. Los estados principales distinguen una orden pendiente de confirmación humana, una orden aplicada y una orden rechazada.
+• El firmware deberá concentrar la interacción física con el usuario, la representación visual, la captura táctil, la edición local de comandos, la comunicación Wi-Fi y el transporte de órdenes hacia el servicio 3C.
 
-El control de acceso del dispositivo se realiza mediante un token configurado en el entorno del backend. Cuando el token requerido no está disponible y no se habilita explícitamente un modo inseguro de desarrollo, la recepción de órdenes se bloquea. Esta condición evita que una instancia del servicio quede disponible para aceptar comandos del dispositivo sin un mecanismo mínimo de autenticación.
+• El backend deberá concentrar la API del dispositivo, la normalización de órdenes, el almacenamiento temporal de comandos, la interpretación estructurada mediante inteligencia artificial, la validación determinista y el control de revisión humana.
 
-La revisión humana se implementa mediante un mecanismo de propuestas con estados de propuesta, aprobación y rechazo. Cada propuesta identifica la fila que será revisada, los campos que se pretende modificar y el identificador de la orden que la originó cuando corresponde. Durante la revisión se mantiene un bloqueo temporal de la fila para impedir que otra propuesta concurrente modifique simultáneamente la misma posición lógica. El bloqueo expira después de un período definido, lo que evita mantener indefinidamente un recurso reservado.
+• La interfaz web deberá coordinar el acceso autenticado a Google Sheets, la localización de la tarea, la generación de la vista previa, la confirmación o rechazo de la propuesta y la comunicación del resultado final hacia el dispositivo.
 
-### 3.1.4 Interpretación, validación y control humano
+• Se deberá mantener la separación entre interacción embebida, interpretación probabilística, validación determinista, revisión humana y persistencia.
 
-La interpretación de las órdenes se ejecuta mediante Google GenAI con una salida estructurada orientada a operaciones deterministas. El modelo no recibe autorización para modificar directamente la fuente maestra. Su función se limita a transformar el lenguaje natural en una estructura que contiene la tarea buscada, las operaciones solicitadas y una indicación de si la orden requiere revisión.
+### c) Condiciones iniciales del subsistema de firmware y plataforma electrónica
 
-Después de la interpretación se ejecuta una etapa de validación determinista. En ella se verifican los campos permitidos, la correspondencia de encabezados, la validez de tipos de datos, las unidades de tiempo y la pertenencia de los valores de catálogo a los registros existentes. Las reglas restringen explícitamente las columnas modificables y bloquean operaciones que no correspondan a la estructura esperada de la estrategia. Cuando una condición no puede comprobarse, el procesamiento se detiene y la solicitud se dirige a revisión.
+• El firmware deberá utilizar el entorno de compilación `panel_4848s040` definido en `platformio.ini`, basado en la plataforma `espressif32@6.8.1`, framework Arduino y placa `esp32-s3-devkitm-1`.
 
-La interfaz humana presenta una vista previa antes de efectuar cualquier escritura. La aplicación identifica de manera controlada la fila objetivo y muestra los cambios propuestos junto con sus valores resultantes. La escritura únicamente se habilita después de una acción explícita de confirmación. La acción de rechazo cierra la propuesta sin aplicar cambios y permite comunicar al panel que la orden no fue ejecutada.
+• La configuración deberá establecer 16 MB de Flash y PSRAM OPI, con `BOARD_HAS_PSRAM=1`.
 
-### 3.1.5 Fuente maestra y acceso a Google Sheets
+• La interfaz gráfica deberá operar a 480 × 480 píxeles mediante Arduino-GFX y una arquitectura RGB con inicialización `st7701_type8_init_operations`.
 
-La fuente maestra se encuentra implementada en Google Sheets. El acceso desde la interfaz web se realiza mediante autenticación OAuth de Google y solicitudes HTTPS contra la API de Google Sheets. La aplicación obtiene la configuración de la hoja, verifica la estructura esperada, consulta los encabezados reales, identifica los catálogos necesarios y localiza la tarea antes de construir una propuesta de modificación.
+• El sistema táctil deberá operar mediante el controlador GT911 sobre I²C, utilizando las líneas definidas por el firmware para SDA y SCL y la dirección I²C `0x5D`.
 
-La aplicación cliente ejecuta directamente las operaciones de lectura y escritura sobre la API de Google Sheets utilizando el token de acceso obtenido con OAuth. El backend participa en la interpretación, la validación, el almacenamiento temporal de órdenes y el control de revisión, mientras que la interfaz autenticada realiza la persistencia efectiva una vez que la persona responsable confirma la vista previa. Esta distribución debe mantenerse diferenciada para evitar atribuir al backend una función de escritura que actualmente se ejecuta en la interfaz.
+• El firmware deberá mantener una máquina de estados con los estados `Booting`, `Offline`, `Ready`, `Busy`, `Pending`, `Applied`, `Rejected` y `Error`, de manera que la recepción de una orden no se confunda con su aplicación efectiva.
 
-La versión actual no presenta dependencias del servicio Google Cloud Storage, de buckets ni de autenticación mediante una cuenta de servicio para la persistencia descrita. Tampoco se evidenció un backend basado en FastAPI o Flask. Por tanto, dichos componentes no se consideran condiciones iniciales de esta versión y no deben incorporarse a la descripción de las funcionalidades implementadas.
+• La interfaz de edición deberá utilizar un búfer de comandos con capacidad máxima de 240 caracteres, cursor independiente, ventana de visualización, teclado virtual, inserción, eliminación, desplazamiento y cambio entre los modos alfabético y numérico.
 
-### 3.1.6 Conexiones principales del sistema completo
+• El firmware deberá generar las solicitudes del dispositivo utilizando `device_id`, `request_id` y el texto del comando, permitiendo identificar retransmisiones y evitar duplicados lógicos.
 
-La arquitectura electrónica considera la alimentación del panel, la interfaz de visualización RGB, el sistema táctil y los elementos auxiliares definidos para la variante física empleada. El detalle de las asignaciones eléctricas se reserva para el Anexo A. La interfaz lógica mantiene una resolución de 480 × 480 píxeles para la interacción y la presentación de estados.
+• El firmware deberá soportar, como mínimo, los recursos de la API `/api/device/v1/health`, `/api/device/v1/commands`, `/api/device/v1/commands/pending`, `/api/device/v1/commands/:id` y `/api/device/v1/commands/:id/result`.
 
-La arquitectura lógica requiere conectividad de red entre el panel y el equipo que expone el backend. El dispositivo debe utilizar una dirección accesible dentro de la red local; una dirección de bucle local exclusiva del equipo de desarrollo no proporciona conectividad física al panel. El servicio debe mantenerse disponible sobre la interfaz de red adecuada del host para permitir que el dispositivo consulte su estado y transmita órdenes.
+• El dispositivo no deberá ejecutar escritura directa sobre Google Sheets. Su responsabilidad deberá limitarse a capturar, editar, transportar y consultar el estado de la orden, además de presentar el resultado al usuario.
 
-El acceso a la fuente maestra se realiza mediante HTTPS desde la interfaz web hacia los servicios de Google. La conexión entre el panel y el backend utiliza HTTP en la versión actual dentro de la infraestructura local. La diferencia entre ambos tramos debe conservarse en la descripción técnica, ya que representa una condición de seguridad distinta para cada segmento de comunicación.
+• La funcionalidad de audio deberá mantenerse opcional mediante `PANEL_AUDIO_ENABLED_VALUE`; cuando se encuentre habilitada, el firmware deberá utilizar la configuración I²S definida en el código y, cuando se encuentre deshabilitada, los GPIO asociados podrán reservarse para la variante física correspondiente.
 
-### 3.1.7 Condiciones de software del sistema completo
+### d) Condiciones iniciales de descubrimiento del backend y comunicación de red
 
-El entorno de desarrollo se configura sobre Ubuntu mediante WSL2. Para el firmware se requiere un entorno compatible con PlatformIO, Arduino y las dependencias gráficas definidas para el panel. Para el backend se requiere Node.js, npm y el conjunto de dependencias declarado por el proyecto, incluyendo TypeScript, Express, Vite, React, Google GenAI y el mecanismo de autenticación OAuth utilizado por la interfaz.
+• El firmware deberá utilizar descubrimiento dinámico del backend mediante mDNS y no deberá depender de una dirección IPv4 privada fija como autoridad de configuración en tiempo de ejecución.
 
-La configuración local del firmware debe definir los parámetros de red, la dirección del backend, el identificador del dispositivo y el token de autenticación correspondiente. La configuración local del backend debe contener los parámetros necesarios para el servicio, la integración con Google y la funcionalidad de inteligencia artificial. Los valores sensibles deben permanecer fuera del control de versiones y utilizar archivos locales o variables de entorno.
+• El servicio deberá descubrirse mediante la consulta mDNS `_3c._tcp` y deberá asociarse al nombre lógico estable `3c-backend.local`.
 
-La ejecución del sistema completo requiere que firmware y backend estén configurados de manera compatible. Una discrepancia en la dirección del servicio, el token, la configuración de Google o los parámetros de la hoja impide que el flujo alcance la etapa de actualización. La condición inicial, por tanto, no se limita a disponer de los dos repositorios, sino que exige coherencia entre sus parámetros de comunicación y operación.
+• El resultado del descubrimiento deberá incluir la dirección IP resuelta y el puerto del servicio.
 
-### 3.1.8 Condiciones de red e infraestructura
+• El firmware deberá conservar en NVS, dentro del espacio `backend`, el host lógico, la dirección resuelta y el puerto mediante `Preferences`.
 
-La infraestructura mínima requiere una red Wi-Fi con capacidad para establecer comunicación LAN entre el panel y el equipo que ejecuta el backend. Cuando el desarrollo se realiza mediante WSL2, la modalidad de red y las reglas de exposición del sistema anfitrión deben permitir que el dispositivo físico alcance el servicio. La dirección efectiva utilizada por el firmware debe corresponder a una interfaz accesible desde el panel.
+• El endpoint almacenado en NVS deberá cargarse durante `setup()` antes del establecimiento de la conexión Wi-Fi, permitiendo utilizar una dirección previamente conocida como primera referencia.
 
-El equipo de desarrollo debe disponer de conectividad hacia los servicios externos requeridos por Google para la autenticación, la generación de contenido estructurado y el acceso a la fuente maestra. También se requiere el entorno físico de conexión del panel y los medios necesarios para su alimentación y programación.
+• Cuando no exista un endpoint válido en caché, se deberá efectuar descubrimiento mDNS antes de intentar la comprobación de salud del backend.
 
-La disponibilidad de la infraestructura debe verificarse antes de considerar operativo el flujo. El estado disponible del backend, la correcta autenticación del dispositivo, la autenticación de la cuenta de Google y la accesibilidad de la hoja constituyen comprobaciones independientes. El fallo de cualquiera de estas condiciones interrumpe el procesamiento de una orden antes de su aplicación.
+• Cuando la comprobación `GET /api/device/v1/health` falle, el firmware deberá realizar una nueva consulta mDNS y efectuar un único reintento de comprobación.
 
-### 3.1.9 Condiciones de seguridad
+• Los comandos y el sondeo de estado deberán utilizar el endpoint descubierto en tiempo de ejecución y no una dirección codificada en el firmware.
 
-Las credenciales de red, los tokens de autenticación, las claves de Google GenAI y los parámetros sensibles de acceso deben mantenerse fuera del control de versiones. La configuración local de cada subsistema se utiliza como mecanismo de separación entre el código reproducible y los valores propios del entorno de ejecución. Esta separación es obligatoria para evitar que información sensible quede incorporada en el repositorio.
+• La comunicación ESP32 → backend deberá mantenerse mediante HTTP en la implementación local vigente. El acceso del backend hacia Google deberá realizarse mediante HTTPS.
 
-La comunicación entre firmware y backend se ejecuta mediante HTTP local en la versión vigente. Esta condición constituye una limitación explícita de seguridad y deja abierta como trabajo futuro la adopción de mecanismos de protección de transporte adecuados para entornos fuera de la red controlada. El acceso a Google se mantiene mediante HTTPS y autenticación OAuth, por lo que los dos segmentos poseen mecanismos de protección diferentes.
+### e) Condiciones iniciales del subsistema backend Asistente 3C
 
-La confirmación humana se mantiene como barrera previa a la persistencia. La recepción, interpretación o validación de una orden no implica autorización automática de escritura. Esta condición constituye un control funcional y de seguridad del sistema, ya que separa la propuesta generada por inteligencia artificial de la modificación efectiva de la información maestra.
+• El backend deberá ejecutarse como aplicación Node.js con TypeScript y Express y deberá integrar una interfaz React/Vite.
 
-### 3.1.10 Flujo de datos del sistema completo como condición inicial
+• La configuración vigente deberá utilizar `@google/genai` para la interpretación estructurada de órdenes y deberá permitir seleccionar el modelo mediante la variable `GEMINI_MODEL`, utilizando `gemini-2.5-flash` como valor predeterminado.
 
-El flujo mínimo comienza con una interacción del usuario en el panel ESP32-S3-4848S040. El firmware transforma la interacción en una orden y la transmite al backend mediante la red local. El backend valida la autenticación del dispositivo, registra la orden y conserva su identificador para mantener el control de duplicados.
+• La API del dispositivo deberá exponer un recurso de salud, un recurso de recepción de comandos, un recurso de comandos pendientes, un recurso de consulta de estado y un recurso de reporte del resultado.
 
-La interfaz web recibe la orden pendiente y procede con la lectura de la estructura real de la hoja. Se consultan encabezados y catálogos, se interpreta el lenguaje natural mediante Google GenAI y posteriormente se aplican reglas deterministas. La tarea objetivo se localiza de forma controlada y se genera una propuesta temporal con los campos que podrían modificarse.
+• La normalización del comando deberá exigir `device_id` y `text`, aceptar `request_id` explícito o generarlo automáticamente y rechazar identificadores con caracteres no permitidos.
 
-La propuesta se presenta a la persona responsable mediante la interfaz de revisión humana. Mientras la propuesta permanece en revisión se conserva el control temporal de la fila correspondiente. Cuando la persona confirma, la interfaz autenticada ejecuta la escritura autorizada sobre Google Sheets. Cuando la persona rechaza, los cambios no se escriben.
+• El almacenamiento de órdenes deberá mantener los estados `pending_confirmation`, `applied` y `rejected`, con un tiempo de vida de 15 minutos y una capacidad máxima de 50 órdenes residentes.
 
-Una vez concluido el proceso, el resultado se comunica al backend y, cuando la orden fue originada en el panel, el estado se reporta nuevamente al dispositivo. El panel presenta el resultado mediante sus estados de operación. De esta manera, el flujo completo mantiene separados la captura, el procesamiento de inteligencia artificial, la validación determinista, la aprobación humana y la persistencia.
+• La recepción de comandos deberá controlar duplicados mediante la combinación de `device_id` y `request_id`.
 
-### 3.1.11 Componentes no establecidos como condición inicial
+• La autenticación del dispositivo deberá utilizar `ESP32_API_TOKEN`; cuando el token no se encuentre configurado, la API de comandos y estado deberá permanecer bloqueada salvo que `ALLOW_INSECURE_DEVICE_API=true` se habilite expresamente para desarrollo.
 
-La inspección de la implementación vigente no evidenció una arquitectura de persistencia basada en Google Cloud Storage para el flujo 3C descrito. Tampoco se evidenció un servicio Python basado en FastAPI o Flask dentro del backend actualmente integrado. Por tanto, esos componentes no se incorporan como dependencias ni como funcionalidades implementadas de la versión V6.
+• La integración CI deberá utilizar el repositorio `wpv10barza/asistente-3c` fijado al commit configurado en el workflow del firmware, evitando que el proceso de prueba dependa implícitamente de una versión móvil del backend.
 
-La documentación tampoco atribuye al firmware una función de escritura directa sobre Google Sheets, debido a que la persistencia efectiva se realiza en la interfaz autenticada. Esta diferenciación evita confundir el canal de transporte del dispositivo con el mecanismo de actualización de la fuente maestra y preserva la separación funcional entre el sistema embebido y la aplicación web.
+### f) Condiciones iniciales de interpretación, validación determinista y control humano
 
-### 3.1.12 Resumen de condiciones iniciales mínimas obligatorias
+• La interpretación mediante Google GenAI deberá producir una salida JSON estructurada y no deberá ejecutar directamente cambios sobre la fuente maestra.
 
-El sistema completo T-030 requiere como mínimo la operación conjunta del firmware ESP32-S3-4848S040 y del backend Asistente 3C. El primer subsistema proporciona la interacción física, la representación visual, la edición de comandos, la conectividad y el seguimiento del estado. El segundo proporciona la recepción de órdenes, la autenticación del dispositivo, la interpretación mediante Google GenAI, la validación determinista, la gestión de propuestas y el control de la revisión humana.
+• El contrato de salida deberá identificar, como mínimo, `tarea_buscada`, `tarea_id`, `operaciones`, `requiere_revision` y `motivo_revision`, utilizando un esquema explícito.
 
-La interfaz web autenticada constituye el componente que coordina la consulta y la actualización de Google Sheets dentro del flujo vigente. La disponibilidad de red, la autenticación, la configuración de Google, la estructura esperada de la hoja y la coherencia de los parámetros entre subsistemas son condiciones necesarias para completar una operación. La ausencia de cualquiera de los elementos esenciales impide considerar operativo el flujo completo.
+• Las operaciones permitidas deberán estar restringidas a los campos definidos en `FIELD_RULES`: ItemMantenible, ModoDeFalla, Restriccion, LimitesAceptables, ComentariosCondicionales, Origen, Frecuencia, UnidadTiempo, Especialidad y Labour1.
 
-### 3.1.13 Criterio editorial y de control V6
+• Las columnas modificables deberán permanecer restringidas a B, C, H, I, J, K, L, M, N y O.
 
-The V6 Benchmark baseline is retained as a documented technical source within this consolidated Chapter III record. Its statements are preserved as baseline documentation and are not reinterpreted as execution results.
+• La aplicación deberá verificar que cada columna real coincida con el encabezado esperado antes de aceptar una operación.
 
-### 3.1.14 Criterio de redacción y fuentes de la línea base
+• Los campos de catálogo deberán coincidir con valores existentes en los catálogos detectados y no deberán introducir valores inventados.
 
-La documentación principal del repositorio se mantiene en tercera persona y mediante párrafos técnicos. Los detalles de implementación de bajo nivel, código fuente, comandos de instalación, asignaciones de pines, direcciones concretas, procedimientos de diagnóstico y configuraciones sensibles se reservan para los anexos y documentos técnicos correspondientes.
+• La frecuencia deberá representarse como entero mayor o igual a uno y las unidades de tiempo deberán normalizarse hacia los valores admitidos por el contrato.
 
-Fuentes verificadas en la versión V6: configuración vigente del firmware, implementación actual del panel, configuración del proyecto Asistente 3C, API de dispositivo, control de propuestas y revisión, interfaz web y archivos de exclusión de credenciales. La redacción se ajusta a la implementación observada y evita incorporar componentes no sustentados.
+• Los campos de texto largo no deberán aceptar expresiones incompletas como `...`, `…` o `etc.`.
 
-Versión V6 Benchmark - Sistema completo obligatorio - Firmware + Backend - Sin componentes no evidenciados
+• La tarea deberá localizarse mediante la columna F (`Nombre`) o mediante la columna E (`TareaId`) cuando el usuario lo indique explícitamente.
+
+• Cuando el modelo no produzca operaciones válidas o declare que se requiere revisión, el proceso no deberá continuar hacia la aplicación automática de cambios.
+
+• La interfaz deberá presentar una vista previa con la fila objetivo, el valor identificado y cada operación propuesta antes de habilitar la escritura.
+
+• La confirmación humana deberá mantenerse como condición previa a la aplicación de los valores en Google Sheets.
+
+• El rechazo deberá cerrar la propuesta sin aplicar los cambios y deberá reportar el estado `rejected` al comando del dispositivo cuando exista un comando externo asociado.
+
+### g) Condiciones iniciales de la fuente maestra y acceso a Google Sheets
+
+• La fuente maestra deberá utilizar Google Sheets como almacenamiento estructurado de la estrategia 3C.
+
+• La interfaz web deberá autenticarse mediante OAuth de Google utilizando el alcance `https://www.googleapis.com/auth/spreadsheets`.
+
+• La configuración deberá obtener desde `/api/config` el identificador de la hoja, el nombre de la pestaña, la fila de encabezados y la columna de búsqueda.
+
+• Antes de preparar una modificación, la interfaz deberá leer los encabezados reales de la hoja y verificar que E corresponda a `TareaId` y F corresponda a `Nombre`.
+
+• La interfaz deberá obtener los catálogos existentes desde las columnas B, C, N y O para proporcionar contexto real a la etapa de interpretación.
+
+• La localización de la fila deberá exigir una coincidencia única. Cuando existan varias coincidencias, el sistema deberá detener el procesamiento y solicitar una identificación más precisa.
+
+• La escritura deberá realizarse mediante solicitudes autenticadas contra la API de Google Sheets y únicamente después de la confirmación explícita de la vista previa.
+
+• No se deberá atribuir al firmware, al endpoint `/api/extract` ni al API de comandos la autoridad directa de escritura sobre Google Sheets, ya que la aplicación web autenticada ejecuta esa operación.
+
+• No se deberá considerar Google Cloud Storage como mecanismo de persistencia de la estrategia 3C mientras no exista una ruta de implementación que lo utilice efectivamente.
+
+### h) Condiciones iniciales del ciclo de revisión y bloqueo temporal
+
+• Cada propuesta deberá registrar fila, coincidencia encontrada, operaciones, identificador externo opcional, estado, fecha de creación, fecha de actualización y fecha de expiración.
+
+• Las propuestas deberán utilizar los estados `proposed`, `approved` y `rejected`.
+
+• El sistema deberá mantener un bloqueo temporal por fila para impedir que dos propuestas activas modifiquen simultáneamente la misma posición lógica.
+
+• El tiempo de vida predeterminado del bloqueo y de la propuesta deberá ser de cinco minutos.
+
+• Una propuesta expirada deberá impedir su aprobación y deberá liberar el bloqueo correspondiente.
+
+• Una propuesta aprobada deberá liberar el bloqueo de la fila una vez que el flujo de revisión haya concluido.
+
+### i) Condiciones iniciales de configuración y credenciales
+
+• Los valores propios del entorno del dispositivo deberán mantenerse en `include/local_config.h`, archivo que deberá permanecer fuera del control de versiones.
+
+• El firmware no deberá incorporar credenciales reales de Wi-Fi ni tokens de dispositivo dentro de `app_config.h` o `main.cpp`.
+
+• El backend deberá utilizar variables de entorno para `GEMINI_API_KEY`, `GEMINI_MODEL`, `ESP32_API_TOKEN`, `PORT`, `SPREADSHEET_ID`, `SHEET_NAME` y `HEADER_ROW`, además de los parámetros de CI que correspondan.
+
+• La variable `ASSISTANT_BASE_URL_VALUE` se deberá conservar únicamente como compatibilidad de configuración y no deberá utilizarse como autoridad de endpoint en tiempo de ejecución.
+
+• La configuración del sistema deberá separar código reproducible, credenciales, parámetros locales y artefactos de prueba.
+
+### j) Condiciones iniciales de seguridad y límites de confianza
+
+• La recepción de comandos del dispositivo deberá utilizar autenticación mediante token y comparación segura del valor configurado.
+
+• La generación mediante IA deberá considerarse una etapa probabilística y no una autoridad de escritura.
+
+• La validación determinista deberá constituir la barrera de cumplimiento del contrato de columnas, encabezados, catálogos, tipos y unidades.
+
+• La confirmación humana deberá permanecer como barrera previa a la persistencia.
+
+• La comunicación local ESP32 → backend mediante HTTP deberá declararse como una limitación de seguridad del estado vigente.
+
+• Los valores sensibles no deberán imprimirse en los diagnósticos seriales ni almacenarse dentro de archivos controlados por Git.
+
+### k) Condiciones iniciales del flujo de datos del sistema completo
+
+• El flujo deberá iniciar con una interacción táctil o con una orden previamente estructurada en el panel.
+
+• El firmware deberá establecer conectividad Wi-Fi, resolver el backend mediante mDNS cuando corresponda, recuperar o actualizar el endpoint en NVS y comprobar la disponibilidad del servicio.
+
+• La orden deberá transmitirse al endpoint de comandos con identificación de dispositivo y de petición.
+
+• El backend deberá normalizar la orden, detectar duplicados y mantenerla en estado `pending_confirmation`.
+
+• La interfaz web deberá recuperar la orden pendiente, leer encabezados y catálogos reales, invocar `/api/extract`, localizar la tarea y registrar la propuesta para revisión.
+
+• La interfaz deberá mostrar la vista previa y requerir confirmación antes de modificar la hoja.
+
+• Una confirmación deberá aplicar los valores autorizados, cerrar la propuesta como aprobada y reportar `applied` al dispositivo.
+
+• Un rechazo deberá cerrar la propuesta como rechazada y reportar `rejected` al dispositivo.
+
+• Una respuesta HTTP inválida, un estado de protocolo desconocido, la ausencia de `command_id`, un error de transporte o un resultado no reconocido deberán conducir al estado visible de error del panel y no deberán permanecer silenciosamente en estado pendiente.
+
+### l) Condiciones iniciales de pruebas y evidencia de ejecución
+
+• El repositorio deberá mantener pruebas de contrato para Wi-Fi, descubrimiento del backend y máquina de estados del panel.
+
+• La integración continua deberá ejecutar las pruebas de contrato antes de compilar el firmware y deberá comprobar además la aplicación real Asistente 3C mediante pruebas de TypeScript, API, E2E de navegador y E2E entre monitor y API del dispositivo.
+
+• El firmware deberá compilarse en CI para el entorno `panel_4848s040` y deberá generarse un paquete reproducible con `firmware.bin`, `bootloader.bin`, `partitions.bin`, `firmware.elf`, disposición de *flash* y sumas SHA-256.
+
+• El manifiesto de CI deberá diferenciar una compilación validada de una programación física del dispositivo y no deberá presentar la compilación como evidencia de *flashing*.
+
+### m) Condiciones iniciales mínimas obligatorias y criterio editorial
+
+• El sistema T-030 deberá mantener coordinados el firmware ESP32-S3-4848S040 y el backend Asistente 3C como subsistemas complementarios.
+
+• La documentación deberá redactarse en tercera persona, con lenguaje técnico, prescriptivo y verificable, utilizando `deberá`, `debe` y `deberán` para establecer condiciones obligatorias.
+
+• Cada condición deberá corresponder a una característica comprobable en el código, la configuración, las pruebas o una fuente externa claramente identificada.
+
+• No se deberán incorporar como condiciones implementadas componentes o tecnologías que no estén sustentados por el código vigente.
+
+• Los detalles de bajo nivel, comandos de instalación, credenciales y configuraciones específicas del entorno deberán permanecer fuera del cuerpo normativo cuando su inclusión reduzca la trazabilidad o exponga información sensible.
+
+### 3.1.14. Fuentes de implementación verificadas
+
+La redacción de esta sección deberá mantenerse sincronizada, como mínimo, con las siguientes fuentes de implementación:
+
+• `platformio.ini`: entorno de compilación, plataforma, memoria, PSRAM, dependencias y objetivo `panel_4848s040`.
+
+• `include/app_config.h`: configuración local, identificador de dispositivo, parámetros temporales, brillo, audio y compatibilidad de endpoint.
+
+• `src/main.cpp`: inicialización del display, touch, audio, Wi-Fi, mDNS, NVS, API HTTP, máquina de estados, editor de comandos, sondeo y tratamiento de errores.
+
+• `wpv10barza/asistente-3c/server.ts`: servidor Node/Express, integración GenAI, contrato de extracción, configuración de Google Sheets, propuestas y revisión.
+
+• `wpv10barza/asistente-3c/server/deviceApi.ts`: contrato HTTP del dispositivo y autorización mediante token.
+
+• `wpv10barza/asistente-3c/server/deviceCommands.ts`: normalización, deduplicación, estados, TTL y límite de comandos.
+
+• `wpv10barza/asistente-3c/server/reviewControl.ts`: propuestas, estados, bloqueo de filas y expiración.
+
+• `wpv10barza/asistente-3c/src/App.tsx`: OAuth de Google, lectura de encabezados y catálogos, localización de tareas, vista previa, escritura autenticada y reporte del resultado al dispositivo.
+
+• `.github/workflows/firmware-and-pages.yml` y los archivos de pruebas del repositorio: evidencia automatizada de contratos, E2E, compilación y empaquetado.
 
 **V14.1 Design expansion.** The following Section 3.2 preserves the V14.1 design/evidence layer inside the consolidated Chapter III hierarchy.
 
