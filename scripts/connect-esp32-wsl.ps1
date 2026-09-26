@@ -53,6 +53,6 @@ Write-Host ""
 Write-Host "Ahora, dentro de WSL, ejecute:"
 Write-Host ""
 Write-Host '  cd $HOME/projects/4848-production'
-Write-Host '  ./scripts/setup-wsl-env.sh'
+Write-Host '  bash ./scripts/setup-wsl-env.sh'
 Write-Host '  ls -l /dev/ttyACM* /dev/ttyUSB* 2>/dev/null'
 Write-Host ""
