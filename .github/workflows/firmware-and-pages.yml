@@ -57,6 +57,9 @@ jobs:
           grep -q 'platformio==6.2.0' scripts/setup-wsl-env.sh
           grep -q '/dev/ttyACM' scripts/setup-wsl-env.sh
           grep -q '/dev/ttyUSB' scripts/setup-wsl-env.sh
+          grep -q 'python3 -m venv' scripts/setup-wsl-env.sh
+          grep -q 'python3 -m venv --upgrade' scripts/setup-wsl-env.sh
+          grep -q 'Get-FileHash' scripts/connect-esp32-wsl.ps1
 
       - name: Test Wi-Fi source contract
         run: python tests/test_wifi_source.py
@@ -170,6 +173,7 @@ jobs:
           cp .pio/build/panel_4848s040/firmware.elf dist/
           printf '%s\n' '0x0000 bootloader.bin' '0x8000 partitions.bin' '0x10000 firmware.bin' > dist/flash-layout.txt
           (cd dist && sha256sum * > SHA256SUMS.txt)
+          sha256sum scripts/connect-esp32-wsl.ps1 scripts/setup-wsl-env.sh scripts/flash-panel.sh > dist/SCRIPT-SHA256SUMS.txt
           printf '{"source_sha":"%s","environment":"panel_4848s040","validation":"compiled_not_physically_flashed"}\n' "${GITHUB_SHA}" > dist/manifest.json
 
       - uses: actions/upload-artifact@v4
