@@ -123,7 +123,7 @@ const char* stateLabel(PanelState state) {
   switch (state) {
     case PanelState::Booting: return "INICIANDO";
     case PanelState::Offline: return "SIN CONEXION";
-    case PanelState::Ready: return "WSL DISPONIBLE";
+    case PanelState::Ready: return "BACKEND DISPONIBLE";
     case PanelState::Busy: return "PROCESANDO";
     case PanelState::Pending: return "PENDIENTE";
     case PanelState::Applied: return "APLICADO";
@@ -262,7 +262,7 @@ void drawPanel() {
     drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(20, 370, 210, 82, "PROBAR BACKEND", color565(15, 82, 135));
   drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
 }
 
@@ -739,10 +739,10 @@ void pollCommandStatus() {
   Serial.printf("GET command status -> %d status=%s result=%s\n", code, status.c_str(), result.c_str());
 
   if (status == "applied") {
-    updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en WSL", true);
+    updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en backend 3C", true);
     lastCommandId = "";
   } else if (status == "rejected") {
-    updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en WSL", true);
+    updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en backend 3C", true);
     lastCommandId = "";
   } else if (status == "error" || status == "failed" || status == "fallido") {
     setProtocolError("POLL", result.length() ? result : "Error reportado por WSL");
