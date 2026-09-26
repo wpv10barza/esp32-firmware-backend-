@@ -211,7 +211,7 @@ i) **Condiciones iniciales de red e infraestructura**
 
 • El firmware no deberá depender de `127.0.0.1` ni de una dirección IPv4 privada fija como autoridad del endpoint en tiempo de ejecución.
 
-• El backend deberá descubrirse mediante el servicio mDNS `_3c._tcp` y deberá asociarse al nombre lógico estable `3c-backend.local`.
+• El firmware deberá descubrir el backend mediante la consulta del servicio mDNS `_3c._tcp` y deberá asociar el resultado al nombre lógico estable `3c-backend.local`.
 
 • El descubrimiento deberá proporcionar la dirección IP resuelta y el puerto del servicio para construir el endpoint operativo.
 
