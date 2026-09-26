@@ -45,6 +45,33 @@ require(MAIN, 'Wire.begin(pins::touchSda, pins::touchScl, 100000)')
 require(MAIN, 'displayReady = true;')
 require(MAIN, 'drawPanel();')
 
+
+# Complete editor button contract: the controls visible above the virtual keyboard
+# must remain wired to the same touch regions used by handleTouch().
+for button in [
+    'drawButton(8, 172, 100, 36, "CANCELAR"',
+    'drawButton(112, 172, 72, 36, "<"',
+    'drawButton(192, 172, 72, 36, "DEL"',
+    'drawButton(272, 172, 115, 36,',
+    'keyboardMode == virtual_keyboard::KeyboardMode::Alpha ? "123" : "ABC"',
+]:
+    require(MAIN, button)
+
+# Each virtual-key action must remain reachable from the real touch handler.
+for action in [
+    'case KeyKind::Character:',
+    'case KeyKind::Backspace:',
+    'case KeyKind::Space:',
+    'case KeyKind::Enter:',
+    'case KeyKind::ToggleAlphaNumeric:',
+    'virtual_keyboard::hitTest(keyboardMode, sample.x, sample.y, &key)',
+]:
+    require(MAIN, action)
+
+# The editor must actually render the generated key rectangles.
+require(MAIN, 'const size_t count = virtual_keyboard::buildKeys(keyboardMode, keys, 50);')
+require(MAIN, 'display->fillRoundRect(key.rect.left, key.rect.top')
+
 # Success/rejection are terminal and visible; pending is the only polling state that remains active.
 require(MAIN, 'updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en backend 3C", true);')
 require(MAIN, 'updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en backend 3C", true);')
