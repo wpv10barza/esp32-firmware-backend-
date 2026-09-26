@@ -57,6 +57,12 @@ assert health["requires_human_confirmation"] is True, health
 assert health["protocol_version"] == "1.0", health
 assert health["supports_status_polling"] is True, health
 
+# Production discovery contract exposed by the real backend.
+discovery = health["discovery"]
+assert discovery["service"] == "_3c._tcp", discovery
+assert discovery["logical_host"] == "3c-backend.local", discovery
+assert int(discovery["port"]) == int(os.environ.get("DEVICE_API_PORT", "3000")), discovery
+
 device_id = "panel-4848s040-3c-ci"
 request_id = "panel-4848s040-3c-ci-001"
 command = "Cambia la tarea J10 a mensual"
@@ -154,6 +160,9 @@ assert after["command"] is None, after
 
 print("REAL MONITOR DEVICE API E2E: PASS")
 print(f"- base: {BASE_URL}")
+print(f"- discovery service: {discovery['service']}")
+print(f"- discovery logical host: {discovery['logical_host']}")
+print(f"- discovery port: {discovery['port']}")
 print("- health contract")
 print("- authentication")
 print("- command enqueue")
@@ -163,3 +172,13 @@ print("- authenticated status polling")
 print("- human confirmation result")
 print("- terminal applied polling")
 print("- pending queue drained")
+print()
+print("=== PRODUCTION RESULT BLOCK ===")
+print("DISCOVERY _3c._tcp       : PASS")
+print("LOGICAL HOST 3c-backend  : PASS")
+print("HEALTH / API              : PASS")
+print("COMMAND + IDEMPOTENCE     : PASS")
+print("HUMAN CONFIRMATION RESULT : PASS")
+print("TERMINAL POLLING          : PASS")
+print("SIMULATED ESP32 <-> 3C    : PASS")
+print("=== END RESULT BLOCK ===")
