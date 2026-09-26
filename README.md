@@ -121,6 +121,43 @@ La configuración local del firmware debe definir los parámetros de red, la dir
 
 La ejecución del sistema completo requiere que firmware y backend estén configurados de manera compatible. Una discrepancia en la dirección del servicio, el token, la configuración de Google o los parámetros de la hoja impide que el flujo alcance la etapa de actualización. La condición inicial, por tanto, no se limita a disponer de los dos repositorios, sino que exige coherencia entre sus parámetros de comunicación y operación.
 
+
+### 3.1.7.1 Preparación reproducible Windows → WSL2 → PlatformIO
+
+Para programar físicamente el ESP32-S3-4848S040 desde una laptop Windows con WSL2, la conexión USB y el entorno Python se mantienen como dos pasos separados.
+
+**Paso 1 — PowerShell como Administrador**
+
+Ejecutar:
+
+`powershell -ExecutionPolicy Bypass -File .\scripts\connect-esp32-wsl.ps1`
+
+El script muestra `usbipd list`, solicita el `BUSID` del ESP32, ejecuta `usbipd bind --busid <BUSID>` y después `usbipd attach --wsl --busid <BUSID>`. No contiene credenciales del firmware ni del backend.
+
+**Paso 2 — WSL**
+
+Dentro de WSL:
+
+`cd "$HOME/projects/4848-production"`
+
+`bash ./scripts/setup-wsl-env.sh`
+
+El script crea o reutiliza `.venv`, instala `platformio==6.2.0`, verifica Python/PlatformIO y muestra los dispositivos serie visibles en WSL. La configuración privada de `include/local_config.h` permanece separada y no se crea automáticamente.
+
+**Paso 3 — verificar USB**
+
+`ls -l /dev/ttyACM* /dev/ttyUSB* 2>/dev/null`
+
+`pio device list`
+
+**Paso 4 — compilar y cargar**
+
+`source .venv/bin/activate`
+
+`./scripts/flash-panel.sh --monitor`
+
+El script de flash usa exclusivamente el entorno `panel_4848s040` y el puerto serie seleccionado. GitHub Actions valida la sintaxis y el contrato de estos scripts, pero la conexión USB y la carga física siguen siendo una operación local de la laptop.
+
 ### 3.1.8 Condiciones de red e infraestructura
 
 La infraestructura mínima requiere una red Wi-Fi con capacidad para establecer comunicación LAN entre el panel y el equipo que ejecuta el backend. Cuando el desarrollo se realiza mediante WSL2, la modalidad de red y las reglas de exposición del sistema anfitrión deben permitir que el dispositivo físico alcance el servicio. La dirección efectiva utilizada por el firmware debe corresponder a una interfaz accesible desde el panel.
