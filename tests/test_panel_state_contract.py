@@ -29,6 +29,22 @@ require(MAIN, 'setProtocolError("POLL", result.length() ? result : "Error report
 # Unknown or missing backend status must not silently remain PENDING.
 require(MAIN, 'else {\n    setProtocolError("POLL", status.length() ? String("estado desconocido \'") + status + "\'" : "falta status");')
 
+# Physical panel UI contract: the production panel must draw both requested buttons.
+require(MAIN, 'drawButton(20, 370, 210, 82, "PROBAR WSL"')
+require(MAIN, 'drawButton(250, 370, 210, 82, "ENVIAR 3C"')
+require(MAIN, 'else if (sample.y >= 350)')
+require(MAIN, 'if (sample.x < 240)')
+require(MAIN, 'commandEditorOpen = true;')
+
+# Guition 4848S040 display/touch contract from the known-good 19/20 Sep version.
+require(MAIN, 'st7701_type9_init_operations')
+require(MAIN, 'kScreenWidth, kScreenHeight, rgbPanel, 1, true')
+require(MAIN, 'sample.x = rawX < kScreenWidth ? rawX')
+require(MAIN, 'sample.y = rawY < kScreenHeight ? rawY')
+require(MAIN, 'Wire.begin(pins::touchSda, pins::touchScl, 100000)')
+require(MAIN, 'displayReady = true;')
+require(MAIN, 'drawPanel();')
+
 # Success/rejection are terminal and visible; pending is the only polling state that remains active.
 require(MAIN, 'updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en backend 3C", true);')
 require(MAIN, 'updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en backend 3C", true);')
