@@ -37,8 +37,11 @@ require(MAIN, "WiFi.RSSI()", "RSSI diagnostic")
 require(MAIN, "GET health ->", "backend health diagnostic")
 require(MAIN, "Wi-Fi listo:", "Wi-Fi acquisition diagnostic")
 
-# Preserve the known-working ST7701 initialization.
-require(MAIN, "st7701_type8_init_operations", "ST7701 type8 init sequence")
+# Preserve the known-good Guition 4848S040 ST7701/touch initialization.
+require(MAIN, "st7701_type9_init_operations", "ST7701 type9 init sequence")
+require(MAIN, "kScreenWidth, kScreenHeight, rgbPanel, 1, true", "display rotation 1")
+require(MAIN, "sample.x = rawX < kScreenWidth ? rawX", "touch X orientation")
+require(MAIN, "sample.y = rawY < kScreenHeight ? rawY", "touch Y orientation")
 if "tl040wvs03_init_operations" in MAIN:
     raise AssertionError("obsolete TL040WVS03 init sequence is still referenced")
 
@@ -63,4 +66,4 @@ print("- credentials sourced from ignored local_config.h")
 print("- STA mode + auto-reconnect + non-destructive reconnect present")
 print("- diagnostic exposes status/gateway/RSSI without credentials")
 print("- backend URL is not hard-coded to loopback")
-print("- ST7701 type8 init preserved")
+print("- Guition ST7701 type9 init + touch orientation preserved")
