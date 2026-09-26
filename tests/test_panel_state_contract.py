@@ -24,7 +24,7 @@ require(MAIN, 'CONFIRMACIÓN REQUERIDA EN WEB')
 require(MAIN, 'String normalizedStatus(String status)')
 for status in ["error", "failed", "fallido"]:
     require(MAIN, f'status == "{status}"')
-require(MAIN, 'setProtocolError("POLL", result.length() ? result : "Error reportado por WSL");')
+require(MAIN, 'setProtocolError("POLL", result.length() ? result : "Error reportado por backend 3C");')
 
 # Unknown or missing backend status must not silently remain PENDING.
 require(MAIN, 'else {\n    setProtocolError("POLL", status.length() ? String("estado desconocido \'") + status + "\'" : "falta status");')
