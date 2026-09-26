@@ -53,7 +53,7 @@ jobs:
           test -s scripts/connect-esp32-wsl.ps1
           grep -q 'usbipd bind --busid' scripts/connect-esp32-wsl.ps1
           grep -q 'usbipd attach --wsl --busid' scripts/connect-esp32-wsl.ps1
-          grep -q 'python3 -m venv .venv' scripts/setup-wsl-env.sh
+          grep -q 'python3 -m venv "\\$VENV_DIR"' scripts/setup-wsl-env.sh
           grep -q 'platformio==6.2.0' scripts/setup-wsl-env.sh
           grep -q '/dev/ttyACM' scripts/setup-wsl-env.sh
           grep -q '/dev/ttyUSB' scripts/setup-wsl-env.sh
