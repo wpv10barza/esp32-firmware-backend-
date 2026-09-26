@@ -29,11 +29,14 @@ require(MAIN, "#include <Preferences.h>", "NVS Preferences include")
 require(MAIN, 'constexpr char kBackendMdnsService[] = "3c";', "mDNS service name")
 require(MAIN, 'constexpr char kBackendMdnsProtocol[] = "tcp";', "mDNS protocol")
 require(MAIN, "MDNS.queryService(kBackendMdnsService, kBackendMdnsProtocol)", "mDNS service query")
+require(MAIN, "MDNS.queryHost(kBackendLogicalHost)", "resolved backend address")
 require(MAIN, "MDNS.port(index)", "discovered backend port")
 
 
 # Required NVS cache path.
-require(MAIN, "kBackendHostKey, kBackendLogicalHost", "NVS logical host load")
+require(MAIN, "kBackendHostKey", "NVS logical host key")
+if not re.search(r"backendPrefs\.getString\(\s*kBackendHostKey\s*,\s*kBackendLogicalHost\s*\)", MAIN):
+    raise AssertionError("missing NVS logical host load expression")
 require(MAIN, "backendPrefs.getString(kBackendAddressKey, \"\")", "NVS address load")
 require(MAIN, "backendPrefs.getUShort(kBackendPortKey, 0)", "NVS port load")
 require(MAIN, "backendPrefs.putString(kBackendHostKey, endpointValue.logicalHost)", "NVS logical host save")
@@ -70,6 +73,13 @@ require(health, "return checkBackendHealthOnce();", "post-rediscovery health ret
 require(MAIN, 'endpoint("/api/device/v1/commands")', "command endpoint")
 require(MAIN, 'endpoint("/api/device/v1/commands/" + lastCommandId)', "poll endpoint")
 
+
+# Canonical discovery identity must remain aligned with the backend advertiser contract.
+CONTRACT = ROOT / "contract" / "device-command-v1.json"
+contract = __import__("json").loads(CONTRACT.read_text(encoding="utf-8"))
+discovery = contract["discovery"]
+require(MAIN, f'constexpr char kBackendLogicalHost[] = "{discovery["logical_host"]}";', "canonical logical host")
+require(MAIN, 'constexpr char kBackendMdnsService[] = "3c";', "canonical mDNS service")
 
 # CI must execute this contract before the hardware build.
 require(WORKFLOW, "python tests/test_backend_discovery.py", "GitHub Actions backend discovery test")

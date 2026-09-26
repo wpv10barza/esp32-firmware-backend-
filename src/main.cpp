@@ -123,7 +123,7 @@ const char* stateLabel(PanelState state) {
   switch (state) {
     case PanelState::Booting: return "INICIANDO";
     case PanelState::Offline: return "SIN CONEXION";
-    case PanelState::Ready: return "WSL DISPONIBLE";
+    case PanelState::Ready: return "BACKEND DISPONIBLE";
     case PanelState::Busy: return "PROCESANDO";
     case PanelState::Pending: return "PENDIENTE";
     case PanelState::Applied: return "APLICADO";
@@ -262,7 +262,7 @@ void drawPanel() {
     drawCentered(WiFi.localIP().toString(), 310, 1, color565(150, 205, 235));
   }
 
-  drawButton(20, 370, 210, 82, "PROBAR WSL", color565(15, 82, 135));
+  drawButton(20, 370, 210, 82, "PROBAR BACKEND", color565(15, 82, 135));
   drawButton(250, 370, 210, 82, "ENVIAR 3C", color565(18, 105, 73));
 }
 
@@ -513,17 +513,24 @@ bool discoverBackendEndpoint() {
     while (logicalHost.endsWith(".")) logicalHost.remove(logicalHost.length() - 1);
     if (!logicalHost.endsWith(".local")) logicalHost += ".local";
 
-    const IPAddress address = MDNS.address(index);
     const uint16_t port = MDNS.port(index);
-    if (port == 0 || address == IPAddress()) continue;
-
-    Serial.printf(
-      "BACKEND: mDNS candidate host=%s address=%s port=%u\n",
-      logicalHost.c_str(), address.toString().c_str(), port);
+    if (port == 0) continue;
 
     if (!logicalHost.equalsIgnoreCase(kBackendLogicalHost)) {
       continue;
     }
+
+    const IPAddress address = MDNS.queryHost(kBackendLogicalHost);
+    if (address == IPAddress()) {
+      Serial.printf(
+        "BACKEND: mDNS host %s did not resolve to an IPv4 address\n",
+        kBackendLogicalHost);
+      continue;
+    }
+
+    Serial.printf(
+      "BACKEND: mDNS candidate host=%s address=%s port=%u\n",
+      logicalHost.c_str(), address.toString().c_str(), port);
 
     BackendEndpoint discovered;
     discovered.logicalHost = kBackendLogicalHost;
@@ -739,13 +746,13 @@ void pollCommandStatus() {
   Serial.printf("GET command status -> %d status=%s result=%s\n", code, status.c_str(), result.c_str());
 
   if (status == "applied") {
-    updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en WSL", true);
+    updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en backend 3C", true);
     lastCommandId = "";
   } else if (status == "rejected") {
-    updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en WSL", true);
+    updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en backend 3C", true);
     lastCommandId = "";
   } else if (status == "error" || status == "failed" || status == "fallido") {
-    setProtocolError("POLL", result.length() ? result : "Error reportado por WSL");
+    setProtocolError("POLL", result.length() ? result : "Error reportado por backend 3C");
   } else if (status == "pending_confirmation" || status == "pending" || status == "pendiente") {
     backendAvailable = true;
     updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB");
@@ -757,7 +764,7 @@ void pollCommandStatus() {
 const char controlPage[] PROGMEM = R"HTML(
 <!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font-family:system-ui;max-width:680px;margin:auto;padding:24px;background:#eef3f7}section{background:white;padding:20px;border-radius:16px;box-shadow:0 5px 20px #0001}button,textarea{font:inherit}button{padding:13px 18px;border:0;border-radius:10px;background:#08784f;color:white}textarea{box-sizing:border-box;width:100%;min-height:120px;padding:12px;margin:8px 0 12px}.warn{color:#805500}</style>
-<h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">La orden se envía al backend y queda pendiente de confirmación en la web. Google Sheets cambia solo después de la confirmación web.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="send3c()">Enviar al asistente</button><button onclick="health()">Probar WSL</button><pre id="result"></pre></section>
+<h1>Panel ESP32-4848S040 3C</h1><section><p class="warn">La orden se envía al backend y queda pendiente de confirmación en la web. Google Sheets cambia solo después de la confirmación web.</p><textarea id="text" placeholder="Cambia la tarea J10 a mensual"></textarea><button onclick="send3c()">Enviar al asistente</button><button onclick="health()">Probar backend</button><pre id="result"></pre></section>
 <script>async function send3c(){const b=new URLSearchParams({text:document.querySelector('#text').value});const r=await fetch('/api/3c',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b});result.textContent=r.status+' '+await r.text()}async function health(){const r=await fetch('/api/backend-health',{method:'POST'});result.textContent=r.status+' '+await r.text()}</script></html>
 )HTML";
 

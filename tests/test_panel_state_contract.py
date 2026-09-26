@@ -24,14 +24,14 @@ require(MAIN, 'CONFIRMACIÓN REQUERIDA EN WEB')
 require(MAIN, 'String normalizedStatus(String status)')
 for status in ["error", "failed", "fallido"]:
     require(MAIN, f'status == "{status}"')
-require(MAIN, 'setProtocolError("POLL", result.length() ? result : "Error reportado por WSL");')
+require(MAIN, 'setProtocolError("POLL", result.length() ? result : "Error reportado por backend 3C");')
 
 # Unknown or missing backend status must not silently remain PENDING.
 require(MAIN, 'else {\n    setProtocolError("POLL", status.length() ? String("estado desconocido \'") + status + "\'" : "falta status");')
 
 # Success/rejection are terminal and visible; pending is the only polling state that remains active.
-require(MAIN, 'updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en WSL", true);')
-require(MAIN, 'updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en WSL", true);')
+require(MAIN, 'updatePanel(PanelState::Applied, result.length() ? result : "Confirmado en backend 3C", true);')
+require(MAIN, 'updatePanel(PanelState::Rejected, result.length() ? result : "Rechazado en backend 3C", true);')
 require(MAIN, 'updatePanel(PanelState::Pending, "CONFIRMACIÓN REQUERIDA EN WEB");')
 
 print("Panel state contract: PASS")
