@@ -40,6 +40,13 @@ jobs:
           test ! -f include/local_config.h
           ! git ls-files | grep -Ei 'credentials|service-account|\.env$'
 
+      - name: Validate WSL flash script contract
+        run: |
+          bash -n scripts/flash-panel.sh
+          grep -q 'ENVIRONMENT="panel_4848s040"' scripts/flash-panel.sh
+          grep -q 'pio run -e "$ENVIRONMENT" -t upload --upload-port "$PORT"' scripts/flash-panel.sh
+          grep -q 'pio device monitor --port "$PORT" --baud "$BAUD"' scripts/flash-panel.sh
+
       - name: Test Wi-Fi source contract
         run: python tests/test_wifi_source.py
 
