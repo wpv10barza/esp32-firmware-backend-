@@ -9,6 +9,8 @@ def require(text, needle):
 
 require(APP, "static String commandBuffer = DEFAULT_3C_COMMAND_VALUE;")
 require(MAIN, '#include "command_buffer.h"')
+require(MAIN, '#include "command_validation.h"')
+require(MAIN, '#include "monitor_theme.h"')
 require(MAIN, '#include "command_text_viewport.h"')
 require(MAIN, '#include "virtual_keyboard.h"')
 require(MAIN, "CommandBuffer<kCommandCapacity> commandBuffer;")
@@ -16,7 +18,20 @@ require(MAIN, "commandBuffer.set(app_config::commandBuffer.c_str());")
 require(MAIN, "app_config::commandBuffer = commandBuffer.c_str();")
 require(MAIN, "send3CCommand(app_config::commandBuffer);")
 require(MAIN, "virtual_keyboard::hitTest")
+require(MAIN, "command_validation::hasContent")
+require(MAIN, "COMANDO VACIO: EJECUCION BLOQUEADA")
+require(MAIN, "COMANDO VACIO: ESCRIBE UNA ORDEN")
 require(MAIN, "command_text_viewport::compute")
 assert "send3CCommand(app_config::defaultCommand);" not in MAIN
 
 print("runtime command editor regression: PASS")
+
+def test_empty_command_paths_are_blocked_before_network_or_ui_close():
+    enter_guard = '''if (!command_validation::hasContent(requested.c_str(), requested.length())) {
+                setEditorNotice("COMANDO VACIO: ESCRIBE UNA ORDEN");'''
+    assert enter_guard in MAIN
+    assert 'web.send(400, "application/json"' in MAIN
+    assert '"empty command"' in MAIN
+
+if __name__ == "__main__":
+    test_empty_command_paths_are_blocked_before_network_or_ui_close()
