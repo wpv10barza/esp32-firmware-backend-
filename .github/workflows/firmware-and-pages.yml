@@ -40,6 +40,26 @@ jobs:
           test ! -f include/local_config.h
           ! git ls-files | grep -Ei 'credentials|service-account|\.env$'
 
+      - name: Validate historical UI plus production mDNS contract
+        run: |
+          grep -q 'st7701_type9_init_operations' src/main.cpp
+          grep -q '0, 12000000, false, 0, 0, 0' src/main.cpp
+          grep -q 'Wire.begin(pins::touchSda, pins::touchScl, 100000)' src/main.cpp
+          grep -q 'sample.x = rawX' src/main.cpp
+          grep -q 'sample.y = rawY' src/main.cpp
+          grep -q '"PROBAR WSL"' src/main.cpp
+          grep -q '"ENVIAR 3C"' src/main.cpp
+          grep -q '"EDITAR ORDEN 3C"' src/main.cpp
+          grep -q '"CANCELAR"' src/main.cpp
+          grep -q 'KeyboardMode::NumericSymbols' src/main.cpp
+          grep -q '3c-backend.local' src/main.cpp
+          grep -q 'MDNS.queryService' src/main.cpp
+          grep -q 'MDNS.queryHost' src/main.cpp
+          grep -q 'Preferences backendPrefs' src/main.cpp
+          grep -q 'loadBackendEndpointFromNvs' src/main.cpp
+          grep -q 'saveBackendEndpointToNvs' src/main.cpp
+          grep -q 'health failed; rediscovering' src/main.cpp
+
       - name: Validate WSL flash script contract
         run: |
           bash -n scripts/flash-panel.sh
@@ -60,6 +80,26 @@ jobs:
           grep -q 'python3 -m venv' scripts/setup-wsl-env.sh
           grep -q 'python3 -m venv --upgrade' scripts/setup-wsl-env.sh
           grep -q 'Get-FileHash' scripts/connect-esp32-wsl.ps1
+
+      - name: Validate PCU Windows and Ubuntu launchers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s pcu/PCU-4848.cmd
+          test -s pcu/PCU-4848.ps1
+          test -s pcu/pcu-4848.sh
+          test -s pcu/README.txt
+          bash -n pcu/pcu-4848.sh
+          grep -q 'usbipd attach --wsl --busid' pcu/PCU-4848.ps1
+          grep -q 'busid.txt' pcu/PCU-4848.ps1
+          grep -q 'wslpath' pcu/PCU-4848.ps1
+          grep -q '/dev/serial/by-id' pcu/pcu-4848.sh
+          grep -q '/sys/class/tty' pcu/pcu-4848.sh
+          grep -q 'esp32-panel-3c.local' pcu/pcu-4848.sh
+          grep -q '3c-backend.local' pcu/pcu-4848.sh
+          grep -q 'local_config.h' pcu/pcu-4848.sh
+          grep -q 'pio.*run.*panel_4848s040' pcu/pcu-4848.sh
+          pwsh -NoProfile -Command '$tokens=$null; $errors=$null; [System.Management.Automation.Language.Parser]::ParseFile("pcu/PCU-4848.ps1", [ref]$tokens, [ref]$errors) | Out-Null; if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; exit 1 }'
 
       - name: Test Wi-Fi source contract
         run: python tests/test_wifi_source.py
@@ -164,21 +204,42 @@ jobs:
       - name: Compile ESP32-S3-4848S040
         run: pio run --environment panel_4848s040
 
-      - name: Package reproducible binaries
+      - name: Package firmware plus PCU and validated source
         run: |
-          mkdir -p dist
-          cp .pio/build/panel_4848s040/firmware.bin dist/
-          cp .pio/build/panel_4848s040/bootloader.bin dist/
-          cp .pio/build/panel_4848s040/partitions.bin dist/
-          cp .pio/build/panel_4848s040/firmware.elf dist/
-          printf '%s\n' '0x0000 bootloader.bin' '0x8000 partitions.bin' '0x10000 firmware.bin' > dist/flash-layout.txt
-          (cd dist && sha256sum * > SHA256SUMS.txt)
-          sha256sum scripts/connect-esp32-wsl.ps1 scripts/setup-wsl-env.sh scripts/flash-panel.sh > dist/SCRIPT-SHA256SUMS.txt
-          printf '{"source_sha":"%s","environment":"panel_4848s040","validation":"compiled_not_physically_flashed"}\n' "${GITHUB_SHA}" > dist/manifest.json
+          set -euo pipefail
+          mkdir -p dist/firmware dist/source/include dist/source/src
+          cp .pio/build/panel_4848s040/firmware.bin dist/firmware/
+          cp .pio/build/panel_4848s040/bootloader.bin dist/firmware/
+          cp .pio/build/panel_4848s040/partitions.bin dist/firmware/
+          cp .pio/build/panel_4848s040/firmware.elf dist/firmware/
+          printf '%s\n' '0x0000 bootloader.bin' '0x8000 partitions.bin' '0x10000 firmware.bin' > dist/firmware/flash-layout.txt
+          (cd dist/firmware && sha256sum bootloader.bin partitions.bin firmware.bin firmware.elf flash-layout.txt > SHA256SUMS.txt)
+
+          cp pcu/PCU-4848.cmd dist/
+          cp pcu/PCU-4848.ps1 dist/
+          cp pcu/pcu-4848.sh dist/
+          cp pcu/README.txt dist/PCU-README.txt
+          chmod +x dist/pcu-4848.sh
+
+          cp platformio.ini dist/source/
+          cp include/*.h dist/source/include/
+          rm -f dist/source/include/local_config.h
+          cp src/main.cpp dist/source/src/
+          printf '%s\n' "${GITHUB_SHA}" > dist/source-sha.txt
+
+          sha256sum pcu/PCU-4848.cmd pcu/PCU-4848.ps1 pcu/pcu-4848.sh pcu/README.txt > dist/PCU-SHA256SUMS.txt
+          printf '{"source_sha":"%s","environment":"panel_4848s040","historical_ui_sha":"5e01cc1a25ca9c27ad659a23c914eec6bacefe34","mdns_merge_sha":"086fb635c688f2b5f430bc5a6684c1c11fb53275","backend_sha":"9343e00dfa0932c660f06738ab26b46d14df50b5","validation":"compiled_and_ci_tested_not_physically_flashed","wifi_personalization":"local_only_via_pcu"}\n' "${GITHUB_SHA}" > dist/manifest.json
+          (cd dist && find . -type f ! -name PACKAGE-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > PACKAGE-SHA256SUMS.txt)
 
       - uses: actions/upload-artifact@v4
         with:
           name: esp32-s3-4848s040-firmware
+          path: dist/firmware/
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esp32-s3-4848s040-mdns-pcu
           path: dist/
           if-no-files-found: error
 
