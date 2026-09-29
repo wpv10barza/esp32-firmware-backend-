@@ -8,6 +8,22 @@ The governing documentation sequence is:
 
 **WEB FIRST then REPOSITORY AFTER**
 
+## Índice de secciones
+
+- **3.1** Initial conditions and documentation scope
+- **3.2** Design of the system
+  - **3.2.1** Electronic design
+  - **3.2.2** Diseño de software
+  - **3.2.3** Diseño del agente de IA: Modelo de inteligencia artificial y procesamiento controlado
+  - **3.2.4** Arquitectura de compilación y enlazado
+  - **3.2.5** Tactile interface design
+  - **3.2.6** Tactile treatment
+  - **3.2.7** Integrated evidence status
+- **3.3** Implementation
+- **3.4** Validation
+- **3.5** Commissioning
+- **3.6** Final integrated documentation control
+
 The integration rule is: preserve documented technical content, remove only direct duplication or obsolete version labels, and resolve differences by explicitly contrasting the two records. No technical statement is promoted from “documented” to “physically tested” unless execution evidence exists.
 
 ## Version integration and traceability
@@ -363,15 +379,242 @@ El procesamiento de una instrucción se estructura de forma secuencial mediante 
 
 Esta secuencia mantiene separadas las responsabilidades de interpretación semántica y ejecución determinista. Se tiene en cuenta que un error de formato, una discrepancia de encabezado, un valor de catálogo inexistente o una condición no verificable interrumpe el avance normal del proceso, evitando que la salida del modelo se convierta en una modificación directa sobre la fuente de datos.
 
-### 3.2.4 Tactile interface design
+### 3.2.4 Arquitectura de compilación y enlazado
+
+La construcción del firmware 3C del panel ESP32-S3-4848S040 se realiza mediante PlatformIO y se estructura conceptualmente en cuatro etapas técnicas: **preprocesamiento, compilación, enlazado y empaquetado**. Este flujo transforma el código fuente y sus dependencias en los artefactos binarios destinados al microcontrolador, manteniendo separadas las responsabilidades de la lógica de interacción, los controladores gráficos, la interfaz táctil, la comunicación y el servicio de dispositivo.
+
+En el repositorio, el punto de entrada del objetivo `panel_4848s040` es `src/main.cpp`. El archivo `platformio.ini` define `panel_4848s040` como entorno de PlatformIO, utiliza la plataforma `espressif32@6.8.1`, la placa `esp32-s3-devkitm-1` y el framework Arduino. El archivo no declara de forma explícita `src_dir` ni `build_src_filter`; por tanto, la estructura estándar de PlatformIO utiliza el directorio `src/` del proyecto y el archivo `src/main.cpp` constituye la fuente principal del firmware.
+
+#### A. Fase de preprocesamiento
+
+La primera etapa resuelve las directivas del preprocesador, las cabeceras y las macros que determinan la configuración concreta de la compilación. En `src/main.cpp` se incluyen las bibliotecas de plataforma y comunicación, entre ellas `Arduino.h`, `Arduino_GFX_Library.h`, `ESPmDNS.h`, `HTTPClient.h`, `Preferences.h`, `WebServer.h`, `WiFi.h`, `Wire.h` y `driver/i2s.h`, además de las cabeceras locales `app_config.h`, `command_buffer.h`, `command_text_viewport.h` y `virtual_keyboard.h`.
+
+La selección del objetivo del panel queda condicionada por la definición:
+
+```cpp
+#if defined(BOARD_PANEL_4848S040)
+```
+
+Esta macro se proporciona desde `platformio.ini` mediante:
+
+```
+-D BOARD_PANEL_4848S040=1
+-D BOARD_HAS_PSRAM=1
+-D CORE_DEBUG_LEVEL=3
+```
+
+De esta manera, el preprocesador determina qué partes del código pertenecen al objetivo físico `panel_4848s040`. La configuración también establece el tipo de PSRAM OPI y la memoria Flash de 16 MB.
+
+La dependencia gráfica del firmware 3C se incorpora mediante PlatformIO como `moononournation/GFX Library for Arduino@1.5.9`. En consecuencia, `Arduino_GFX_Library.h` corresponde a una dependencia administrada por PlatformIO y no a una copia local duplicada del controlador gráfico.
+
+El repositorio actual no contiene una segunda descripción ESPHome del mismo panel dentro de la estructura versionada. Por tanto, la documentación de compilación no debe presentar dos objetivos simultáneos ni atribuir una doble compilación de ST7701S o GT911. La implementación del firmware utilizada por este entorno se concentra en el objetivo PlatformIO `panel_4848s040`.
+
+#### B. Fase de compilación
+
+Después del preprocesamiento, cada unidad de traducción se transforma conceptualmente en código objeto para la plataforma ESP32-S3. En este proyecto, `src/main.cpp` concentra la lógica principal del panel: inicialización del display, lectura del GT911, representación de estados, editor de comandos, teclado virtual, comunicación HTTP, mDNS, Wi-Fi, polling y servidor local del dispositivo.
+
+La construcción utiliza el entorno:
+
+```
+[env:panel_4848s040]
+platform = espressif32@6.8.1
+board = esp32-s3-devkitm-1
+framework = arduino
+```
+
+La cadena de herramientas proporcionada por la plataforma Espressif seleccionada por PlatformIO prepara el código para la arquitectura de ejecución del ESP32-S3. La compilación integra el código del proyecto con las bibliotecas de Arduino, Arduino-GFX y las funciones de comunicación y periféricos utilizadas por `src/main.cpp`.
+
+Debe distinguirse entre lo configurado explícitamente por el repositorio y las opciones internas de la cadena de herramientas. En el `platformio.ini` vigente no aparece `build_type = release` ni una bandera de optimización manual como `-Os` u `-O2`. Por ello, la documentación no debe presentar ninguna de esas opciones como una configuración explícita del proyecto.
+
+La arquitectura de dependencias puede resumirse de la siguiente forma:
+
+```
+Cabeceras y macros
+       │
+       ▼
+Unidades de traducción .cpp
+       │
+       ▼
+Código objeto para ESP32-S3
+       │
+       ├── lógica del panel
+       ├── Arduino-GFX
+       ├── Arduino / Wi-Fi / HTTP
+       ├── Wire / GT911
+       ├── mDNS
+       └── I²S, cuando se habilita
+```
+
+Este nivel explica la relación entre las partes del firmware sin introducir listados extensos de objetos ni detalles de ensamblador que no son necesarios para la descripción académica del diseño.
+
+#### C. Fase de enlazado
+
+La tercera etapa reúne el código objeto y las bibliotecas necesarias en una imagen ejecutable para la placa. En términos del modelo clásico de compilación, el enlazador resuelve referencias entre unidades de traducción, bibliotecas y símbolos del framework Arduino y construye el ejecutable ELF del firmware.
+
+En el objetivo `panel_4848s040`, la memoria de Flash se configura explícitamente mediante:
+
+```
+board_build.flash_size = 16MB
+board_upload.flash_size = 16MB
+board_build.partitions = default_16MB.csv
+```
+
+Asimismo, el proyecto declara:
+
+```
+board_build.psram_type = opi
+board_build.arduino.memory_type = qio_opi
+```
+
+Estos parámetros describen la plataforma de memoria sobre la que se ejecutará el firmware. Debe distinguirse la función de cada recurso: la Flash de 16 MB y la tabla de particiones determinan la organización de la imagen persistente, mientras que la PSRAM OPI constituye memoria adicional de ejecución disponible para el sistema. La presencia de PSRAM no implica que todos los objetos compilados sean enlazados directamente dentro de ella.
+
+El artefacto ELF esperado por PlatformIO para este entorno corresponde a:
+
+```
+.pio/build/panel_4848s040/firmware.elf
+```
+
+El ELF conserva la información necesaria para representar el programa enlazado y constituye el artefacto principal de construcción antes del empaquetado binario.
+
+En el firmware de este repositorio, el enlace integra la ruta concreta de inicialización del hardware que fue definida durante la compilación. La instancia de `Arduino_RGB_Display` se construye con un panel RGB de 480 × 480, rotación 1 y la secuencia de inicialización `st7701_type9_init_operations`.
+
+Las señales principales del panel y del táctil se declaran de forma explícita en `src/main.cpp`:
+
+```
+ST7701S / RGB:
+DE       GPIO18
+VSYNC    GPIO17
+HSYNC    GPIO16
+PCLK     GPIO21
+
+SPI de comandos:
+CS       GPIO39
+CLK      GPIO48
+MOSI     GPIO47
+
+GT911:
+SDA      GPIO19
+SCL      GPIO45
+I²C      0x5D
+
+Backlight:
+GPIO38
+```
+
+En esta arquitectura, GPIO19 y GPIO20 pertenecen a funciones diferentes: GPIO19 actúa como SDA del GT911, mientras que GPIO20 forma parte del bus de datos RGB utilizado por el panel. Esta separación debe conservarse en la documentación para evitar presentar ambos GPIO como parte del mismo subsistema eléctrico.
+
+#### D. Fase de empaquetado de la imagen
+
+Después del enlace, PlatformIO transforma el resultado de la construcción en los artefactos binarios utilizados para carga y distribución del firmware. El flujo operativo del repositorio se inicia mediante `scripts/flash-panel.sh`, que ejecuta explícitamente:
+
+```bash
+pio run -e panel_4848s040
+```
+
+Si la compilación finaliza correctamente, el mismo script ejecuta la tarea de carga mediante:
+
+```bash
+pio run -e panel_4848s040 -t upload --upload-port "$PORT"
+```
+
+Los artefactos estándar asociados al entorno incluyen:
+
+```
+firmware.bin
+bootloader.bin
+partitions.bin
+firmware.elf
+```
+
+El artefacto `firmware.bin` constituye la representación binaria del programa preparada para el proceso de carga. `bootloader.bin` y `partitions.bin` complementan la imagen de ejecución con los componentes correspondientes al arranque y a la organización de la Flash. La generación de estos artefactos constituye evidencia de construcción; el script de carga no debe interpretarse como una verificación automática del funcionamiento eléctrico del panel.
+
+Por ello, en el contexto del firmware 3C, la secuencia académicamente correcta se expresa como:
+
+```
+Cabeceras + macros
+        │
+        ▼
+Fuentes .cpp
+        │
+        ▼
+Compilación para ESP32-S3
+        │
+        ▼
+Objetos + bibliotecas
+        │
+        ▼
+Enlazado
+        │
+        ▼
+firmware.elf
+        │
+        ▼
+Empaquetado PlatformIO
+        │
+        ├── firmware.bin
+        ├── bootloader.bin
+        └── partitions.bin
+```
+
+#### Integración con el flujo operativo del proyecto
+
+Esta arquitectura de compilación se materializa en el flujo reproducible del repositorio. En particular, `scripts/flash-panel.sh` ejecuta primero `pio run -e panel_4848s040` y solo continúa con la carga si dicha compilación termina correctamente. Por tanto, el comando de construcción no representa una operación monolítica aislada: desencadena la cadena completa que comienza en el preprocesamiento y termina en la generación de los artefactos de firmware.
+
+La relación entre verificación, construcción y dispositivo físico puede expresarse de la siguiente manera:
+
+```
+Verify / configuración
+        │
+        ▼
+PlatformIO
+        │
+        ├── compilación
+        ├── enlazado
+        └── generación de artefactos
+                │
+                ▼
+          firmware.bin
+                │
+                ▼
+      carga sobre ESP32-S3
+                │
+                ▼
+         monitor serie
+```
+
+La secuencia anterior debe interpretarse como la correspondencia entre el ciclo clásico de construcción y el flujo operativo del firmware 3C: las condiciones y verificaciones preceden a la construcción; la compilación y el enlazado producen la imagen; el empaquetado genera los binarios; y la carga sobre el ESP32-S3 pertenece a un nivel posterior de validación física.
+
+La presencia de `firmware.bin`, `firmware.elf`, `bootloader.bin` y `partitions.bin` demuestra generación de artefactos de construcción del entorno `panel_4848s040`. No obstante, la generación exitosa de estos archivos no constituye, por sí sola, evidencia suficiente de funcionamiento eléctrico del ST7701S, respuesta del GT911, comunicación USB, conectividad de red o estabilidad física del panel. Esas propiedades corresponden al nivel de validación física definido por el proyecto.
+
+En consecuencia, la arquitectura de compilación del firmware 3C puede expresarse académicamente como una cadena de transformación:
+
+```
+cabeceras y configuración
+        →
+unidades de traducción
+        →
+código objeto
+        →
+enlace con bibliotecas
+        →
+ELF
+        →
+binarios de firmware
+        →
+carga sobre el dispositivo
+```
+
+Esta cadena permite explicar cómo la lógica del editor 3C, el teclado virtual, el `commandBuffer`, la comunicación con la Device API y los controladores del panel se convierten en una imagen de firmware para el ESP32-S3 sin confundir las etapas de construcción con las etapas de validación física.
+
+### 3.2.5 Tactile interface design
 
 Pending controlled documentation section. It is reserved for the tactile interaction design of the ESP32-S3-4848S040 panel, including the documented touch-controller interface, interaction regions, priority rules, cursor interaction, keyboard behavior, and touch-hit testing once the corresponding evidence is consolidated.
 
-### 3.2.5 Tactile treatment
+### 3.2.6 Tactile treatment
 
 Pending controlled documentation section. It is reserved for the documented treatment of tactile events, debouncing or event filtering where evidenced, interaction priority, visual feedback, and state transitions.
 
-### 3.2.6 Integrated evidence status
+### 3.2.7 Integrated evidence status
 
 The integrated documentation distinguishes three evidence levels:
 
