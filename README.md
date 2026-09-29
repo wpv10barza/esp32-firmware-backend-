@@ -487,6 +487,24 @@ VSYNC    GPIO17
 HSYNC    GPIO16
 PCLK     GPIO21
 
+RGB data:
+R0       GPIO11
+R1       GPIO12
+R2       GPIO13
+R3       GPIO14
+R4       GPIO0
+G0       GPIO8
+G1       GPIO20
+G2       GPIO3
+G3       GPIO46
+G4       GPIO9
+G5       GPIO10
+B0       GPIO4
+B1       GPIO5
+B2       GPIO6
+B3       GPIO7
+B4       GPIO15
+
 SPI de comandos:
 CS       GPIO39
 CLK      GPIO48
