@@ -381,9 +381,9 @@ Esta secuencia mantiene separadas las responsabilidades de interpretación semá
 
 ### 3.2.4 Arquitectura de compilación y enlazado
 
-La construcción del firmware 3C del panel ESP32-S3-4848S040 se realiza mediante PlatformIO y se estructura conceptualmente en cuatro etapas técnicas: **preprocesamiento, compilación, enlazado y empaquetado**. Este flujo transforma el código fuente y sus dependencias en los artefactos binarios destinados al microcontrolador, manteniendo separadas las responsabilidades de la lógica de interacción, los controladores gráficos, la interfaz táctil, la comunicación y el servicio de dispositivo.
+La construcción del firmware 3C del panel ESP32-S3-4848S040 utiliza el entorno `panel_4848s040` de PlatformIO y se describe conceptualmente en cuatro etapas técnicas: **preprocesamiento, compilación, enlazado y empaquetado**. Este flujo transforma el código fuente y sus dependencias en los artefactos binarios destinados al microcontrolador, manteniendo separadas las responsabilidades de la lógica de interacción, los controladores gráficos, la interfaz táctil, la comunicación y el servicio de dispositivo.
 
-En el repositorio, el punto de entrada del objetivo `panel_4848s040` es `src/main.cpp`. El archivo `platformio.ini` define `panel_4848s040` como entorno de PlatformIO, utiliza la plataforma `espressif32@6.8.1`, la placa `esp32-s3-devkitm-1` y el framework Arduino. El archivo no declara de forma explícita `src_dir` ni `build_src_filter`; por tanto, la estructura estándar de PlatformIO utiliza el directorio `src/` del proyecto y el archivo `src/main.cpp` constituye la fuente principal del firmware.
+En el repositorio, el punto de entrada del objetivo `panel_4848s040` es `src/main.cpp`. El archivo `platformio.ini` define `panel_4848s040` como entorno de PlatformIO, utiliza la plataforma `espressif32@6.8.1`, la placa `esp32-s3-devkitm-1` y el framework Arduino. El `platformio.ini` vigente no declara explícitamente `src_dir` ni `build_src_filter`; por ello, esta sección no atribuye esas propiedades al archivo. La fuente documentada que interviene en el firmware corresponde a `src/main.cpp`, conforme a la estructura de directorios observada en el repositorio.
 
 #### A. Fase de preprocesamiento
 
@@ -476,7 +476,7 @@ El artefacto ELF esperado por PlatformIO para este entorno corresponde a:
 
 El ELF conserva la información necesaria para representar el programa enlazado y constituye el artefacto principal de construcción antes del empaquetado binario.
 
-En el firmware de este repositorio, el enlace integra la ruta concreta de inicialización del hardware que fue definida durante la compilación. La instancia de `Arduino_RGB_Display` se construye con un panel RGB de 480 × 480, rotación 1 y la secuencia de inicialización `st7701_type9_init_operations`.
+En `src/main.cpp`, el código de inicialización del hardware forma parte de la unidad de traducción que se compila y enlaza para el objetivo `panel_4848s040`. La instancia de `Arduino_RGB_Display` se construye con un panel RGB de 480 × 480, rotación 1 y la secuencia de inicialización `st7701_type9_init_operations`.
 
 Las señales principales del panel y del táctil se declaran de forma explícita en `src/main.cpp`:
 
@@ -505,7 +505,7 @@ En esta arquitectura, GPIO19 y GPIO20 pertenecen a funciones diferentes: GPIO19 
 
 #### D. Fase de empaquetado de la imagen
 
-Después del enlace, PlatformIO transforma el resultado de la construcción en los artefactos binarios utilizados para carga y distribución del firmware. El flujo operativo del repositorio se inicia mediante `scripts/flash-panel.sh`, que ejecuta explícitamente:
+Después del enlace, PlatformIO transforma el resultado de la construcción en los artefactos binarios utilizados para carga y distribución del firmware. El flujo operativo documentado utiliza `scripts/flash-panel.sh`, que ejecuta explícitamente:
 
 ```bash
 pio run -e panel_4848s040
